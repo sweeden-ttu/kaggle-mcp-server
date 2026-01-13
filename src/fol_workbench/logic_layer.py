@@ -594,13 +594,19 @@ class LogicEngine:
         Prove that premise implies conclusion.
         
         This checks if (premise AND NOT conclusion) is unsatisfiable.
+        If unsatisfiable, the implication is valid (no counterexample exists).
+        If satisfiable, a counterexample model is returned.
         
         Args:
             premise: Premise formula
             conclusion: Conclusion formula
         
         Returns:
-            ValidationInfo with result
+            ValidationInfo with result:
+            - UNSATISFIABLE: Implication is valid (negation is unsatisfiable)
+            - SATISFIABLE: Counterexample found (model shows premise true, conclusion false)
+            - UNKNOWN: Could not determine (timeout, etc.)
+            - ERROR: Parsing or other error occurred
         """
         self.reset()
         
@@ -622,23 +628,31 @@ class LogicEngine:
         
         self.add_constraint(Not(conclusion_expr))
         
-        # Check satisfiability
+        # Check satisfiability of (premise AND NOT conclusion)
         result = self.check_satisfiability()
         
-        # If unsatisfiable, the implication holds
+        # Check for errors first
+        if result.result == ValidationResult.ERROR:
+            return result
+        
+        # If unsatisfiable, the implication is valid (no counterexample exists)
         if result.result == ValidationResult.UNSATISFIABLE:
+            # The negation (premise AND NOT conclusion) is unsatisfiable,
+            # which means the implication (premise → conclusion) is valid
             return ValidationInfo(
-                result=ValidationResult.SATISFIABLE,  # Implication is valid
+                result=ValidationResult.UNSATISFIABLE,  # Implication is valid
                 statistics=result.statistics
             )
         elif result.result == ValidationResult.SATISFIABLE:
-            # Found counterexample
+            # Found counterexample: (premise AND NOT conclusion) is satisfiable
+            # The model shows values where premise is true but conclusion is false
             return ValidationInfo(
                 result=ValidationResult.SATISFIABLE,  # Counterexample found
                 model=result.model,
                 statistics=result.statistics
             )
         else:
+            # UNKNOWN case - pass through
             return result
     
     def _extract_model_info(self, model: Model) -> ModelInfo:
