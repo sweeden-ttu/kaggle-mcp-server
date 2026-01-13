@@ -476,7 +476,7 @@ class HerbrandConverter:
         if formula == 'False':
             return False
         
-            return False
+        return False
     
     def _split_operator(self, formula: str, op: str) -> List[str]:
         """

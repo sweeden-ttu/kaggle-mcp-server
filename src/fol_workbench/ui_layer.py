@@ -10,10 +10,10 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QMessageBox, QFileDialog, QDialog,
     QLineEdit, QComboBox, QSpinBox, QFormLayout, QDialogButtonBox,
     QSplitter, QGroupBox, QPlainTextEdit, QStatusBar, QMenuBar, QMenu,
-    QToolBar, QAction, QHeaderView, QInputDialog, QListWidget, QListWidgetItem
+    QToolBar, QHeaderView, QInputDialog, QListWidget, QListWidgetItem
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
-from PyQt6.QtGui import QFont, QTextCharFormat, QColor, QSyntaxHighlighter, QTextCursor
+from PyQt6.QtGui import QFont, QTextCharFormat, QColor, QSyntaxHighlighter, QTextCursor, QAction
 
 from .logic_layer import LogicEngine, ValidationResult, ValidationInfo
 from .data_layer import DataLayer, Checkpoint, ProjectMetadata
@@ -24,7 +24,7 @@ from .hypothesis_dialog import HypothesisExperimentDialog
 from .autocomplete import SuggestionEngine
 from .autocomplete_widget import AutocompleteManager
 from .ml_strategy_dialog import MLStrategyDialog
-from .set_evaluation_dialog import SetEvaluationDialog
+from .kmap_widget import KMapDialog
 
 
 class FormulaHighlighter(QSyntaxHighlighter):
@@ -346,6 +346,11 @@ class MainWindow(QMainWindow):
         set_eval_action.setShortcut("Ctrl+E")
         set_eval_action.triggered.connect(self._open_set_evaluation)
         tools_menu.addAction(set_eval_action)
+        # K-map Simplifier
+        kmap_action = QAction("K-map &Simplifier", self)
+        kmap_action.setShortcut("Ctrl+K")
+        kmap_action.triggered.connect(self._show_kmap_simplifier)
+        tools_menu.addAction(kmap_action)
         
         tools_menu.addSeparator()
         
@@ -996,6 +1001,9 @@ class MainWindow(QMainWindow):
     def _open_set_evaluation(self):
         """Open Set Evaluation Dialog for Prolog generation."""
         dialog = SetEvaluationDialog(self)
+    def _show_kmap_simplifier(self):
+        """Show K-map Simplifier dialog."""
+        dialog = KMapDialog(self.data_layer, self)
         dialog.exec()
     
     def _on_suggestion_selected(self, text: str):
