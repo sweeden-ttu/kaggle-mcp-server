@@ -655,6 +655,171 @@ class LogicEngine:
             # UNKNOWN case - pass through
             return result
     
+    def extract_vocabulary_metadata(self) -> Dict[str, Any]:
+        """
+        Extract metadata from vocabulary terms (variables and functions).
+        
+        Returns:
+            Dictionary with vocabulary metadata including:
+            - variables: List of variable names with types
+            - functions: List of function names with signatures
+            - herbrand_base: List of ground instances for Herbrand base
+            - implications: List of implications that can be evaluated
+        """
+        metadata = {
+            "variables": [],
+            "functions": [],
+            "herbrand_base": [],
+            "implications": []
+        }
+        
+        # Extract variable metadata
+        for var_name, var_obj in self.variables.items():
+            var_type = "Bool"  # Default
+            if hasattr(var_obj, 'sort'):
+                sort = var_obj.sort()
+                if sort == BoolSort():
+                    var_type = "Bool"
+                elif sort == IntSort():
+                    var_type = "Int"
+                elif sort == RealSort():
+                    var_type = "Real"
+                elif sort == StringSort():
+                    var_type = "String"
+            
+            metadata["variables"].append({
+                "name": var_name,
+                "type": var_type
+            })
+        
+        # Extract function metadata
+        for func_name, func_obj in self.functions.items():
+            metadata["functions"].append({
+                "name": func_name,
+                "signature": str(func_obj)
+            })
+        
+        # Generate Herbrand base (ground instances)
+        constants = self._extract_constants_from_vocabulary()
+        metadata["herbrand_base"] = self._generate_herbrand_base(constants)
+        
+        # Extract implications from constraints
+        metadata["implications"] = self._extract_implications()
+        
+        return metadata
+    
+    def _extract_constants_from_vocabulary(self) -> List[str]:
+        """Extract constants from vocabulary for Herbrand base generation."""
+        constants = set()
+        # Look for constants in variable names and function arguments
+        for var_name in self.variables.keys():
+            if var_name.islower() and len(var_name) == 1:
+                constants.add(var_name)
+        # Also check for common constant names
+        common_constants = ["a", "b", "c", "d", "e", "f"]
+        constants.update(common_constants)
+        return sorted(list(constants))
+    
+    def _generate_herbrand_base(self, constants: List[str]) -> List[str]:
+        """
+        Generate Herbrand base (ground instances) from predicates and constants.
+        
+        Args:
+            constants: List of constant symbols
+        
+        Returns:
+            List of ground instance strings
+        """
+        ground_instances = []
+        
+        # For each predicate/function, generate ground instances
+        for func_name, func_obj in self.functions.items():
+            # Simple case: generate instances with available constants
+            if constants:
+                for const in constants:
+                    ground_instances.append(f"{func_name}({const})")
+            else:
+                # No constants, just the predicate itself
+                ground_instances.append(func_name)
+        
+        return ground_instances
+    
+    def _extract_implications(self) -> List[Dict[str, str]]:
+        """Extract implications from constraints for evaluation."""
+        implications = []
+        
+        for constraint in self.constraints:
+            constraint_str = str(constraint)
+            # Look for implication patterns
+            if "Implies" in constraint_str or "=>" in constraint_str:
+                # Try to parse premise and conclusion
+                # This is a simplified extraction
+                implications.append({
+                    "formula": constraint_str,
+                    "type": "implication"
+                })
+        
+        return implications
+    
+    def evaluate_herbrand_implications(self, preferred_implications: Optional[List[str]] = None) -> Dict[str, Any]:
+        """
+        Evaluate implications using Herbrand base.
+        
+        Args:
+            preferred_implications: Optional list of implication formulas to evaluate
+        
+        Returns:
+            Dictionary with evaluation results
+        """
+        results = {
+            "evaluated": [],
+            "satisfiable": [],
+            "unsatisfiable": [],
+            "preferred_results": {}
+        }
+        
+        # Get implications from constraints or use provided ones
+        implications_to_evaluate = preferred_implications or []
+        
+        if not implications_to_evaluate:
+            # Extract from constraints
+            for constraint in self.constraints:
+                constraint_str = str(constraint)
+                if "Implies" in constraint_str:
+                    implications_to_evaluate.append(constraint_str)
+        
+        # Evaluate each implication
+        for impl_formula in implications_to_evaluate:
+            # Create temporary solver for this implication
+            temp_engine = LogicEngine()
+            
+            # Parse and add the implication
+            success, error = temp_engine.add_formula(impl_formula)
+            if not success:
+                continue
+            
+            # Check satisfiability
+            result = temp_engine.check_satisfiability()
+            
+            eval_result = {
+                "formula": impl_formula,
+                "result": result.result.value,
+                "model": result.model.interpretation if result.model else None
+            }
+            
+            results["evaluated"].append(eval_result)
+            
+            if result.result == ValidationResult.SATISFIABLE:
+                results["satisfiable"].append(eval_result)
+            elif result.result == ValidationResult.UNSATISFIABLE:
+                results["unsatisfiable"].append(eval_result)
+            
+            # Store preferred results if this was a preferred implication
+            if preferred_implications and impl_formula in preferred_implications:
+                results["preferred_results"][impl_formula] = eval_result
+        
+        return results
+    
     def _extract_model_info(self, model: Model) -> ModelInfo:
         """
         Extract model information from Z3 model.

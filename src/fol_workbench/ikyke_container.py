@@ -125,6 +125,72 @@ class AnalysisResult:
 
 
 @dataclass
+class PerceptronData:
+    """Perceptron data for IKYKE container."""
+    perceptron_id: str
+    weights: List[float]
+    learning_rate: float
+    confidence: float
+    accuracy: float
+    created: str
+    metadata: Dict[str, Any] = None
+    
+    def __post_init__(self):
+        if self.metadata is None:
+            self.metadata = {}
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "perceptron_id": self.perceptron_id,
+            "weights": self.weights,
+            "learning_rate": self.learning_rate,
+            "confidence": self.confidence,
+            "accuracy": self.accuracy,
+            "created": self.created,
+            "metadata": self.metadata
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'PerceptronData':
+        """Create from dictionary."""
+        return cls(**data)
+
+
+@dataclass
+class HerbrandData:
+    """Herbrand base data for IKYKE container."""
+    herbrand_id: str
+    ground_instances: List[str]
+    constants: List[str]
+    predicates: List[str]
+    implications: List[str]
+    created: str
+    metadata: Dict[str, Any] = None
+    
+    def __post_init__(self):
+        if self.metadata is None:
+            self.metadata = {}
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "herbrand_id": self.herbrand_id,
+            "ground_instances": self.ground_instances,
+            "constants": self.constants,
+            "predicates": self.predicates,
+            "implications": self.implications,
+            "created": self.created,
+            "metadata": self.metadata
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'HerbrandData':
+        """Create from dictionary."""
+        return cls(**data)
+
+
+@dataclass
 class IkykeContainer:
     """
     IKYKE data container for runtime data and results.
@@ -136,6 +202,8 @@ class IkykeContainer:
     - Query results
     - Analysis results
     - Checkpoints and save history
+    - Perceptron data
+    - Herbrand base data
     """
     container_id: str = None
     workflow_id: str = None
@@ -158,6 +226,10 @@ class IkykeContainer:
     query_results: List[QueryResult] = None
     analysis_result: Optional[AnalysisResult] = None
     
+    # Perceptron and Herbrand data
+    perceptrons: List[PerceptronData] = None
+    herbrand_bases: List[HerbrandData] = None
+    
     # Metadata
     metadata: Dict[str, Any] = None
     
@@ -177,6 +249,10 @@ class IkykeContainer:
             self.save_history = []
         if self.query_results is None:
             self.query_results = []
+        if self.perceptrons is None:
+            self.perceptrons = []
+        if self.herbrand_bases is None:
+            self.herbrand_bases = []
         if self.metadata is None:
             self.metadata = {}
     
@@ -199,6 +275,16 @@ class IkykeContainer:
     def set_phase(self, phase: WorkflowPhase):
         """Set the current workflow phase."""
         self.current_phase = phase
+        self.modified = datetime.now().isoformat()
+    
+    def add_perceptron(self, perceptron: PerceptronData):
+        """Add a perceptron to the container."""
+        self.perceptrons.append(perceptron)
+        self.modified = datetime.now().isoformat()
+    
+    def add_herbrand_base(self, herbrand: HerbrandData):
+        """Add a Herbrand base to the container."""
+        self.herbrand_bases.append(herbrand)
         self.modified = datetime.now().isoformat()
     
     def to_dict(self) -> Dict[str, Any]:
@@ -224,6 +310,10 @@ class IkykeContainer:
             data["query_results"] = [q.to_dict() for q in self.query_results]
         if self.analysis_result:
             data["analysis_result"] = self.analysis_result.to_dict()
+        if self.perceptrons:
+            data["perceptrons"] = [p.to_dict() for p in self.perceptrons]
+        if self.herbrand_bases:
+            data["herbrand_bases"] = [h.to_dict() for h in self.herbrand_bases]
         
         return data
     
@@ -270,6 +360,18 @@ class IkykeContainer:
             container.analysis_result = AnalysisResult.from_dict(
                 data["analysis_result"]
             )
+        
+        # Load perceptrons
+        if "perceptrons" in data:
+            container.perceptrons = [
+                PerceptronData.from_dict(p) for p in data["perceptrons"]
+            ]
+        
+        # Load herbrand bases
+        if "herbrand_bases" in data:
+            container.herbrand_bases = [
+                HerbrandData.from_dict(h) for h in data["herbrand_bases"]
+            ]
         
         return container
 

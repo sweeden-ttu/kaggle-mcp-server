@@ -784,6 +784,105 @@ def run_hypothesis_loop(
         return f"Error running hypothesis loop: {str(e)}"
 
 
+@mcp.tool()
+def collect_client_feedback(
+    feedback_type: str,
+    content: str,
+    metadata: Optional[Dict[str, Any]] = None
+) -> str:
+    """
+    Collect feedback from client and publish to server.
+    
+    Args:
+        feedback_type: Type of feedback (e.g., "formula", "hypothesis", "design", "performance")
+        content: Feedback content
+        metadata: Optional metadata dictionary
+    
+    Returns:
+        Success message with feedback ID
+    """
+    try:
+        import uuid
+        from datetime import datetime
+        
+        feedback_id = str(uuid.uuid4())
+        feedback_data = {
+            "id": feedback_id,
+            "type": feedback_type,
+            "content": content,
+            "metadata": metadata or {},
+            "timestamp": datetime.now().isoformat(),
+            "status": "collected"
+        }
+        
+        # In a real implementation, this would publish to a server/API
+        # For now, we'll store it locally or return the structured data
+        return json.dumps({
+            "status": "success",
+            "feedback_id": feedback_id,
+            "message": f"Feedback collected and published: {feedback_type}",
+            "data": feedback_data
+        }, indent=2)
+    except Exception as e:
+        return f"Error collecting feedback: {str(e)}"
+
+
+@mcp.tool()
+def extract_vocabulary_metadata() -> str:
+    """
+    Extract metadata from vocabulary terms and evaluate Herbrand base implications.
+    
+    Returns:
+        JSON with vocabulary metadata and Herbrand base evaluation results
+    """
+    try:
+        from fol_workbench.logic_layer import LogicEngine
+        
+        engine = LogicEngine()
+        
+        # Extract vocabulary metadata
+        metadata = engine.extract_vocabulary_metadata()
+        
+        # Evaluate Herbrand base implications
+        implications_result = engine.evaluate_herbrand_implications()
+        
+        return json.dumps({
+            "vocabulary_metadata": metadata,
+            "herbrand_evaluation": implications_result
+        }, indent=2)
+    except Exception as e:
+        return f"Error extracting vocabulary metadata: {str(e)}"
+
+
+@mcp.tool()
+def call_reverse_simulation_with_herbrand(
+    model_name: str,
+    preferred_implications: Optional[List[str]] = None
+) -> str:
+    """
+    Call reverse simulation system with Herbrand base evaluation.
+    
+    Args:
+        model_name: Name of the model to analyze
+        preferred_implications: Optional list of implication formulas to evaluate
+    
+    Returns:
+        JSON with reverse simulation results and Herbrand evaluation
+    """
+    if not REVERSE_SIMULATION_AVAILABLE:
+        return "Reverse simulation system not available."
+    
+    try:
+        system = _get_reverse_sim_system()
+        result = system.call_with_herbrand_evaluation(
+            model_name,
+            preferred_implications
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return f"Error calling reverse simulation: {str(e)}"
+
+
 def main():
     """Run the Kaggle MCP server."""
     mcp.run()

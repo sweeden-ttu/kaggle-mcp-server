@@ -122,7 +122,50 @@ class TaskEngine:
                 events.append(event)
                 current_time = end  # Next task starts after this one
         
+        # After reverse simulation, trigger autocomplete evaluations
+        self._trigger_autocomplete_evaluations(user_id)
+        
         return events
+    
+    def _trigger_autocomplete_evaluations(self, user_id: str):
+        """
+        Trigger autocomplete evaluations after reverse simulation.
+        
+        This method evaluates formulas and generates autocomplete suggestions
+        based on the reverse simulation results.
+        """
+        try:
+            from .autocomplete import SuggestionEngine
+            from .reverse_simulation_system import ReverseSimulationSystem
+            
+            # Initialize autocomplete engine
+            suggestion_engine = SuggestionEngine()
+            
+            # Get reverse simulation system
+            reverse_sim = ReverseSimulationSystem()
+            
+            # Get all models from reverse simulation
+            models = reverse_sim.simulator.unit_models
+            
+            # Generate autocomplete suggestions based on model formulas
+            for model_name, model in models.items():
+                if model.formula:
+                    # Track formula usage for autocomplete
+                    suggestion_engine.track_usage(model.formula)
+                    
+                    # Generate suggestions based on formula patterns
+                    suggestions = suggestion_engine.generate_suggestions(model.formula[:10], max_suggestions=5)
+                    
+                    # Store suggestions for future use
+                    for suggestion in suggestions:
+                        suggestion_engine.track_click(suggestion.text, "auto_evaluated")
+            
+            # Save preferences
+            suggestion_engine._save_preferences()
+            
+        except Exception as e:
+            # Silently fail if autocomplete is not available
+            pass
 
 
 class Calendar:

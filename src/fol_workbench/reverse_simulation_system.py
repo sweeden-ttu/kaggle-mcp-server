@@ -311,3 +311,46 @@ class ReverseSimulationSystem:
             json.dump(state, f, indent=2)
         
         return output_path
+    
+    def call_with_herbrand_evaluation(
+        self,
+        model_name: str,
+        preferred_implications: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Call reverse simulation system with Herbrand base evaluation.
+        
+        This method integrates reverse simulation with Herbrand base evaluation
+        to provide comprehensive analysis of implications.
+        
+        Args:
+            model_name: Name of the model to analyze
+            preferred_implications: Optional list of implication formulas to evaluate
+        
+        Returns:
+            Dictionary with reverse simulation results and Herbrand evaluation
+        """
+        if model_name not in self.simulator.unit_models:
+            return {"error": f"Model {model_name} not found"}
+        
+        model = self.simulator.unit_models[model_name]
+        
+        # Extract vocabulary metadata
+        vocab_metadata = self.logic_engine.extract_vocabulary_metadata()
+        
+        # Evaluate Herbrand base implications
+        herbrand_eval = self.logic_engine.evaluate_herbrand_implications(preferred_implications)
+        
+        # Get model analysis
+        analysis = self.analyze_and_get_feedback(model_name)
+        
+        # Get next steps
+        next_steps = self.propose_next_steps(model_name)
+        
+        return {
+            "model_name": model_name,
+            "vocabulary_metadata": vocab_metadata,
+            "herbrand_evaluation": herbrand_eval,
+            "analysis": analysis,
+            "next_steps": next_steps
+        }
