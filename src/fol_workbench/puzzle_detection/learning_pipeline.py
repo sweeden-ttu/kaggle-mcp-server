@@ -285,6 +285,7 @@ class LearningPipeline:
         resolution: Dict[str, Any] = field(default_factory=dict)
         horn_sld: Dict[str, Any] = field(default_factory=dict)
         herbrand: Dict[str, Any] = field(default_factory=dict)
+        prove_model: Dict[str, Any] = field(default_factory=dict)
         render: Dict[str, str] = field(default_factory=dict)
         errors: List[str] = field(default_factory=list)
 
@@ -360,7 +361,10 @@ class LearningPipeline:
             max_terms=herbrand_max_terms,
         )
 
-        # 8) Render outermost visualization.
+        # 8) Prove model (SAT => provide model; UNSAT => provide certificate info).
+        out.prove_model = self._prove_model(engine=LogicEngine(), formula_str=formula_str, resolution=out.resolution)
+
+        # 9) Render outermost visualization.
         out.render = self._render_pipeline(out, render_format=render_format)
 
         return {"result": out.__dict__}
@@ -440,24 +444,20 @@ class LearningPipeline:
         Best-effort first-order unification on Z3 terms.
         Variables are identified by being 0-arity Consts whose name is in var_names.
         """
-        from z3 import substitute  # type: ignore
-
         def is_var(t: Any) -> bool:
             try:
                 return hasattr(t, "num_args") and t.num_args() == 0 and t.decl().name() in var_names
             except Exception:
                 return False
 
-        # Apply current substitutions
+        # Apply current substitutions to both sides (critical for correctness).
         if subs:
-            pairs = []
-            for k, v in subs.items():
-                try:
-                    # Recreate a Const-ish key by name using the existing term's sort
-                    # (we only ever call this with real Consts, so this is safe-ish).
-                    pass
-                except Exception:
-                    pass
+            try:
+                a = self._apply_subs_to_expr(a, subs)
+                b = self._apply_subs_to_expr(b, subs)
+            except Exception:
+                # Keep best-effort behavior.
+                pass
 
         # Structural unify
         if a.eq(b):
@@ -762,6 +762,46 @@ class LearningPipeline:
             },
         }
 
+    def _prove_model(self, engine: LogicEngine, formula_str: str, resolution: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Prove/model-check the original formula.
+
+        - If SAT: return a model interpretation.
+        - If UNSAT: return UNSAT plus (if available) the resolution empty-clause certificate.
+        """
+        try:
+            engine.reset()
+            ok, err = engine.add_formula(formula_str)
+            if not ok:
+                return {"status": "error", "error": err}
+
+            info = engine.check_satisfiability()
+            # Avoid importing ValidationResult enum here; just stringify.
+            status = getattr(info.result, "value", str(info.result))
+            out: Dict[str, Any] = {"status": status}
+
+            if getattr(info, "model", None) is not None:
+                out["model"] = getattr(info.model, "interpretation", None)
+                out["model_variables"] = getattr(info.model, "variables", None)
+                out["model_complete"] = getattr(info.model, "is_complete", None)
+
+            if getattr(info, "statistics", None) is not None:
+                # Z3 stats may not be JSON-serializable; stringify defensively.
+                try:
+                    out["statistics"] = dict(info.statistics)  # type: ignore[arg-type]
+                except Exception:
+                    out["statistics"] = str(info.statistics)
+
+            if status == "unsatisfiable" and resolution.get("empty_clause_derived"):
+                out["certificate"] = {
+                    "kind": "resolution_empty_clause",
+                    "step_count": len(resolution.get("steps") or []),
+                }
+
+            return out
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
     def _render_pipeline(self, res: "LearningPipeline.FOLPipelineResult", render_format: str) -> Dict[str, str]:
         """
         Render an outermost visualization of the pipeline artifacts.
@@ -775,6 +815,7 @@ class LearningPipeline:
             horn = res.horn_sld.get("is_horn", False)
             u_sz = len(res.herbrand.get("herbrand_universe") or [])
             b_sz = len(res.herbrand.get("herbrand_base") or [])
+            pm = res.prove_model.get("status", "unknown")
             diagram = "\n".join([
                 "flowchart TD",
                 "  A[Eliminate →/↔, push ¬ inward<br/>NNF] --> B[Prenex: quantifiers left<br/>PNF]",
@@ -783,6 +824,7 @@ class LearningPipeline:
                 f"  D --> E[Resolution/Unification<br/>{status}<br/>empty_clause={empty}]",
                 f"  D --> F[Horn/SLD<br/>is_horn={horn}]",
                 f"  D --> G[Herbrand<br/>|U|={u_sz}, |B|={b_sz}]",
+                f"  D --> H[Prove model (Z3)<br/>{pm}]",
             ])
             return {"mermaid": diagram}
 
@@ -840,6 +882,8 @@ class LearningPipeline:
         md.append(f"  - is_horn: `{res.horn_sld.get('is_horn')}`; prolog_rules: `{len(res.horn_sld.get('prolog_emission') or [])}`")
         md.append("- **Step 7 (Herbrand)**")
         md.append(f"  - universe_size: `{len(res.herbrand.get('herbrand_universe') or [])}`; base_size: `{len(res.herbrand.get('herbrand_base') or [])}`")
+        md.append("- **Step 8 (Prove model)**")
+        md.append(f"  - status: `{res.prove_model.get('status')}`")
         if res.errors:
             md.append("")
             md.append("- **Warnings**:")
@@ -1184,4 +1228,120 @@ class LearningPipeline:
                 'statistical_significance': evidence.statistical_significance
             },
             'has_improvement': evidence.meets_criteria
+        }
+    
+    def optimize_for_kaggle_competition(
+        self,
+        competition_data: Dict[str, Any],
+        competition_type: str,
+        swipl_path: str = "swipl"
+    ) -> Dict[str, Any]:
+        """
+        Optimize learning pipeline for Kaggle competition using PROLOG brain.
+        
+        Args:
+            competition_data: Competition dataset and metadata
+            competition_type: Type of competition (tabular, nlp, cv, etc.)
+            swipl_path: Path to SWI-Prolog executable
+            
+        Returns:
+            Optimization results with PROLOG brain configuration
+        """
+        if not self.enable_prolog_integration or self.prolog_brain is None:
+            return {
+                'error': 'PROLOG brain integration not available or disabled',
+                'competition_type': competition_type,
+                'prolog_available': PROLOG_BRAIN_AVAILABLE,
+                'integration_enabled': self.enable_prolog_integration
+            }
+        
+        # Optimize using PROLOG brain
+        optimization_results = self.prolog_brain.optimize_for_kaggle_competition(
+            competition_data=competition_data,
+            competition_type=competition_type
+        )
+        
+        # Create perceptrons based on optimization results
+        created_perceptrons = []
+        for config in optimization_results['perceptron_configs']:
+            perceptron = self.prolog_brain.create_prolog_perceptron(**config)
+            
+            # Adapt to existing perceptron format if needed
+            if PrologPerceptronAdapter is not None:
+                adapted_perceptron = PrologPerceptronAdapter.adapt_to_existing_perceptron(perceptron)
+                self.state.perceptrons[perceptron.perceptron_id] = adapted_perceptron
+            else:
+                # Create a compatible perceptron from scratch
+                if PerceptronUnit is not None and PerceptronUnit != Any:
+                    compatible_perceptron = PerceptronUnit(
+                        input_size=config['input_size'],
+                        learning_rate=0.1,
+                        initial_weights=perceptron.weights,
+                        initial_bias=perceptron.bias
+                    )
+                    self.state.perceptrons[perceptron.perceptron_id] = compatible_perceptron
+            
+            created_perceptrons.append(perceptron.perceptron_id)
+        
+        # Return comprehensive optimization results
+        return {
+            'optimization_results': optimization_results,
+            'created_perceptrons': created_perceptrons,
+            'attention_tensors_created': list(self.prolog_brain.attention_tensors.keys()),
+            'prolog_knowledge_base_size': len(self.prolog_brain.reasoning_engine.knowledge_base),
+            'integration_successful': True,
+            'timestamp': datetime.now().isoformat()
+        }
+    
+    def train_with_prolog_attention(
+        self,
+        training_data: List[Union[Tuple[np.ndarray, int], Tuple[np.ndarray, int, GridSquareFeatures]]],
+        competition_type: str,
+        epochs: int = 100
+    ) -> Dict[str, Any]:
+        """
+        Train pipeline with PROLOG attention mechanisms.
+        
+        Args:
+            training_data: Training data with features and targets
+            competition_type: Type of competition for attention weighting
+            epochs: Number of training epochs
+            
+        Returns:
+            Training results with attention metrics
+        """
+        if not self.enable_prolog_integration or self.prolog_brain is None:
+            return {
+                'error': 'PROLOG brain integration not available',
+                'fallback_to_standard_training': True
+            }
+        
+        # Convert training data to PROLOG format
+        prolog_training_data = []
+        for example in training_data:
+            features, target, grid_features = self._unpack_example(example)
+            if grid_features is not None:
+                # Use grid features for attention weighting
+                prolog_training_data.append((features, float(target), grid_features))
+            else:
+                prolog_training_data.append((features, float(target)))
+        
+        # Train each perceptron with attention
+        training_results = {}
+        for perceptron_id in list(self.state.perceptrons.keys()):
+            if perceptron_id in self.prolog_brain.prolog_perceptrons:
+                result = self.prolog_brain.train_with_prolog_feedback(
+                    training_data=[(features, target) for features, target, *_ in prolog_training_data],
+                    competition_type=competition_type,
+                    perceptron_id=perceptron_id,
+                    epochs=epochs
+                )
+                training_results[perceptron_id] = result
+        
+        return {
+            'training_results': training_results,
+            'competition_type': competition_type,
+            'epochs': epochs,
+            'attention_mechanism_used': True,
+            'total_perceptrons_trained': len(training_results)
         }

@@ -75,6 +75,39 @@ class PrologPerceptron:
         facts.append(f"activation_predicate('{self.perceptron_id}', '{self.activation_predicate}').")
         
         return facts
+    
+    def predict(self, features: np.ndarray) -> Tuple[bool, float]:
+        """
+        Predict using PROLOG-based perceptron.
+        
+        Args:
+            features: Input feature vector
+            
+        Returns:
+            Tuple of (prediction, confidence)
+        """
+        # Calculate weighted sum
+        weighted_sum = np.dot(self.weights, features) + self.bias
+        
+        # Apply activation function based on predicate
+        if self.activation_predicate == "sigmoid_activation":
+            output = 1 / (1 + np.exp(-weighted_sum))
+            prediction = output > 0.5
+        elif self.activation_predicate == "relu_activation":
+            output = max(0, weighted_sum)
+            prediction = output > 0
+        elif self.activation_predicate == "tanh_activation":
+            output = np.tanh(weighted_sum)
+            prediction = output > 0
+        else:
+            # Default to step function
+            output = 1 if weighted_sum > 0 else 0
+            prediction = output == 1
+        
+        # Confidence based on distance from decision boundary
+        confidence = min(1.0, abs(weighted_sum) / (np.linalg.norm(self.weights) + 1e-6))
+        
+        return prediction, confidence
 
 
 class PrologBrain:
@@ -190,7 +223,8 @@ class PrologBrain:
         input_size: int,
         connective_rules: List[str],
         initial_weights: Optional[np.ndarray] = None,
-        initial_bias: float = 0.0
+        initial_bias: float = 0.0,
+        activation_predicate: str = "sigmoid_activation"
     ) -> PrologPerceptron:
         """
         Create PROLOG-based perceptron with connectives.
@@ -201,6 +235,7 @@ class PrologBrain:
             connective_rules: PROLOG rules for connectives
             initial_weights: Optional initial weights
             initial_bias: Initial bias value
+            activation_predicate: Activation function name (default: sigmoid_activation)
             
         Returns:
             PrologPerceptron instance
@@ -215,7 +250,8 @@ class PrologBrain:
             input_size=input_size,
             weights=weights,
             bias=initial_bias,
-            connective_rules=connective_rules
+            connective_rules=connective_rules,
+            activation_predicate=activation_predicate
         )
         
         self.prolog_perceptrons[perceptron_id] = perceptron
@@ -445,7 +481,12 @@ class PrologBrain:
             raise ValueError(f"Perceptron {perceptron_id} not found")
         
         perceptron = self.prolog_perceptrons[perceptron_id]
-        tensor = self.attention_tensors.get(f"attention_{competition_type}")
+        # Find attention tensor by competition type
+        tensor = None
+        for t in self.attention_tensors.values():
+            if t.competition_type == competition_type:
+                tensor = t
+                break
         
         training_history = []
         total_loss = 0.0
@@ -457,7 +498,7 @@ class PrologBrain:
             
             for features, target in training_data:
                 # Apply attention weighting if available
-                if tensor is not None:
+                if tensor is not None and len(tensor.weights) == len(features):
                     weighted_features = features * tensor.weights
                 else:
                     weighted_features = features
@@ -475,10 +516,10 @@ class PrologBrain:
                     epoch_correct += 1
                 
                 # Update weights with attention-weighted learning
-                if tensor is not None:
-                    learning_rate = perceptron.learning_rate * np.mean(tensor.weights)
+                if tensor is not None and len(tensor.weights) == len(features):
+                    learning_rate = 0.1 * np.mean(tensor.weights)  # Default learning rate
                 else:
-                    learning_rate = perceptron.learning_rate
+                    learning_rate = 0.1  # Default learning rate
                 
                 # Weight update with PROLOG reasoning feedback
                 weight_update = learning_rate * error * weighted_features
