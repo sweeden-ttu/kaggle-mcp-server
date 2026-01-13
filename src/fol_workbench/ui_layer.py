@@ -24,6 +24,7 @@ from .hypothesis_dialog import HypothesisExperimentDialog
 from .autocomplete import SuggestionEngine
 from .autocomplete_widget import AutocompleteManager
 from .ml_strategy_dialog import MLStrategyDialog
+from .set_evaluation_dialog import SetEvaluationDialog
 
 
 class FormulaHighlighter(QSyntaxHighlighter):
@@ -339,6 +340,12 @@ class MainWindow(QMainWindow):
         ml_strategy_action.setShortcut("Ctrl+M")
         ml_strategy_action.triggered.connect(self._open_ml_strategy)
         tools_menu.addAction(ml_strategy_action)
+        
+        # Set Evaluation Dialog
+        set_eval_action = QAction("&Set Evaluation (Prolog)", self)
+        set_eval_action.setShortcut("Ctrl+E")
+        set_eval_action.triggered.connect(self._open_set_evaluation)
+        tools_menu.addAction(set_eval_action)
         
         tools_menu.addSeparator()
         
@@ -984,6 +991,11 @@ class MainWindow(QMainWindow):
     def _open_ml_strategy(self):
         """Open ML Strategy System dialog."""
         dialog = MLStrategyDialog(self)
+        dialog.exec()
+    
+    def _open_set_evaluation(self):
+        """Open Set Evaluation Dialog for Prolog generation."""
+        dialog = SetEvaluationDialog(self)
         dialog.exec()
     
     def _on_suggestion_selected(self, text: str):
