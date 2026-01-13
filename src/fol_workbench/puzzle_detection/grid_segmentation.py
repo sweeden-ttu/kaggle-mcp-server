@@ -9,7 +9,12 @@ from typing import List, Tuple, Dict, Any, Optional
 from dataclasses import dataclass
 from PIL import Image
 import numpy as np
-import cv2
+
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
 
 
 @dataclass
@@ -59,6 +64,10 @@ class GridSegmentation:
         Returns:
             List of GridSquare objects
         """
+        if not CV2_AVAILABLE:
+            # Fallback to uniform grid if OpenCV not available
+            return self._create_uniform_grid(image)
+        
         # Convert PIL to OpenCV format
         img_array = np.array(image.convert('RGB'))
         img_cv = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
