@@ -7,7 +7,8 @@ Provides a dialog window for:
 - Visual symbol palette for set operations
 """
 
-from typing import Optional, Dict, List, Any
+import re
+from typing import Optional, Dict, List, Any, Set, Tuple
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QPushButton,
@@ -598,116 +599,76 @@ class SetEvaluationDialog(QDialog):
         """Parse expression and generate Prolog queries."""
         queries: List[str] = []
 
-        # Expressions coming from symbol buttons are whitespace-tokenized like:
-        #   "A ∪ B" -> ["A", "∪", "B"]
-        # The previous implementation tried to split the operator token itself,
-        # yielding empty operands. We fix this by treating operators as tokens
-        # and reading operands from neighboring tokens.
+        text = expr.strip()
+        if not text:
+            return queries
 
-        raw_tokens = [t for t in expr.split() if t.strip()]
-
-        # Also support compact forms like "A∪B" or "x∈S" by exploding tokens.
-        binary_ops = ["∈", "∉", "∋", "⊂", "⊆", "⊃", "⊇", "∪", "∩", "∖", "≠", "=", "≡", "≅", ":=", "≜"]
-
-        def explode_token(tok: str) -> List[str]:
-            # Keep power-set form intact for separate handling: ℘(S)
-            if tok.startswith("℘(") and tok.endswith(")"):
-                return [tok]
-            if tok == "∅":
-                return [tok]
-
-            for op in binary_ops:
-                # Only split if operator is embedded with non-empty operands on both sides
-                if op in tok and tok != op:
-                    parts = tok.split(op)
-                    if len(parts) == 2 and parts[0].strip() and parts[1].strip():
-                        return [parts[0].strip(), op, parts[1].strip()]
-            return [tok]
-
-        tokens: List[str] = []
-        for t in raw_tokens:
-            tokens.extend(explode_token(t))
-
-        def add_query_block(title: str, pretty: str, prolog_line: str):
+        def add_block(title: str, description: str, predicate: str):
             queries.append(f"% {title}")
-            queries.append(f"% Query: {pretty}")
-            queries.append(f"% {prolog_line}")
+            queries.append(f"% Query: {description}")
+            queries.append(predicate)
             queries.append("")
 
-        i = 0
-        while i < len(tokens):
-            tok = tokens[i]
+        pattern_map = [
+            ("Membership", r"(?P<left>\S+)\s*∈\s*(?P<right>\S+)", "member({left}, {right})."),
+            ("Non-membership", r"(?P<left>\S+)\s*∉\s*(?P<right>\S+)", "not_member({left}, {right})."),
+            ("Contains", r"(?P<left>\S+)\s*∋\s*(?P<right>\S+)", "member({right}, {left})."),
+            ("Union", r"(?P<left>\S+)\s*∪\s*(?P<right>\S+)", "union({left}, {right}, Result)."),
+            ("Intersection", r"(?P<left>\S+)\s*∩\s*(?P<right>\S+)", "intersection({left}, {right}, Result)."),
+            ("Difference", r"(?P<left>\S+)\s*∖\s*(?P<right>\S+)", "difference({left}, {right}, Result)."),
+            ("Subset", r"(?P<left>\S+)\s*⊆\s*(?P<right>\S+)", "subset({left}, {right})."),
+            ("Proper subset", r"(?P<left>\S+)\s*⊂\s*(?P<right>\S+)", "proper_subset({left}, {right})."),
+            ("Superset", r"(?P<left>\S+)\s*⊇\s*(?P<right>\S+)", "subset({right}, {left})."),
+            ("Proper superset", r"(?P<left>\S+)\s*⊃\s*(?P<right>\S+)", "proper_subset({right}, {left})."),
+            ("Equivalence", r"(?P<left>\S+)\s*≡\s*(?P<right>\S+)", "set_equal({left}, {right})."),
+            ("Congruence", r"(?P<left>\S+)\s*≅\s*(?P<right>\S+)", "congruent({left}, {right})."),
+        ]
 
-            # Special sets
-            if tok == "∅":
-                add_query_block("Empty set check", "∅", "empty_set(Set).")
-                i += 1
-                continue
-
-            # Power set ℘(S)
-            if tok.startswith("℘(") and tok.endswith(")"):
-                inner = tok[2:-1].strip()
-                if inner:
-                    add_query_block("Power set query", tok, f"power_set({inner}, PowerSet).")
-                i += 1
-                continue
-
-            # Binary operators as standalone tokens, e.g. ["A", "∪", "B"]
-            if tok in binary_ops and tok not in [":=", "≜"]:
-                left = tokens[i - 1].strip() if i - 1 >= 0 else ""
-                right = tokens[i + 1].strip() if i + 1 < len(tokens) else ""
-
-                # If operands are missing, skip safely
-                if not left or not right:
-                    i += 1
+        seen: Set[Tuple[str, str]] = set()
+        for title, pattern, template in pattern_map:
+            for match in re.finditer(pattern, text):
+                description = match.group(0).strip()
+                key = (title, description)
+                if key in seen:
                     continue
+                seen.add(key)
+                predicate = template.format(**match.groupdict())
+                add_block(title, description, predicate)
 
-                pretty = f"{left} {tok} {right}"
+        # Equality / inequality (avoid overlapping matches)
+        for label, symbol, template in [
+            ("Equality", "=", "set_equal({left}, {right})."),
+            ("Not equal", "≠", "not(set_equal({left}, {right}))."),
+        ]:
+            pattern = rf"(?P<left>\S+)\s*{symbol}\s*(?P<right>\S+)"
+            for match in re.finditer(pattern, text):
+                description = match.group(0).strip()
+                key = (label, description)
+                if key in seen:
+                    continue
+                seen.add(key)
+                predicate = template.format(**match.groupdict())
+                add_block(label, description, predicate)
 
-                if tok == "∈":
-                    add_query_block("Membership query", pretty, f"member({left}, {right}).")
-                elif tok == "∉":
-                    add_query_block("Non-membership query", pretty, f"not_member({left}, {right}).")
-                elif tok == "∋":
-                    add_query_block("Contains query", pretty, f"member({right}, {left}).")
-                elif tok == "∪":
-                    add_query_block("Union query", pretty, f"union({left}, {right}, Result).")
-                elif tok == "∩":
-                    add_query_block("Intersection query", pretty, f"intersection({left}, {right}, Result).")
-                elif tok == "∖":
-                    add_query_block("Set difference query", pretty, f"difference({left}, {right}, Result).")
-                elif tok == "⊆":
-                    add_query_block("Subset query", pretty, f"subset({left}, {right}).")
-                elif tok == "⊂":
-                    add_query_block("Proper subset query", pretty, f"proper_subset({left}, {right}).")
-                elif tok == "⊇":
-                    add_query_block("Superset query", pretty, f"subset({right}, {left}).")
-                elif tok == "⊃":
-                    add_query_block("Proper superset query", pretty, f"proper_subset({right}, {left}).")
-                elif tok == "=":
-                    add_query_block("Equality query", pretty, f"set_equal({left}, {right}).")
-                elif tok == "≠":
-                    add_query_block("Inequality query", pretty, f"not(set_equal({left}, {right})).")
-                elif tok == "≡":
-                    # Keep it simple: logical equivalence treated as set equality by default
-                    add_query_block("Equivalence query", pretty, f"set_equal({left}, {right}).")
-                elif tok == "≅":
-                    # Congruence/isomorphism placeholder
-                    add_query_block("Congruence query", pretty, f"congruent({left}, {right}).")
-
-                i += 1
+        for match in re.finditer(r"℘\(\s*(?P<set>\S+)\s*\)", text):
+            description = match.group(0).strip()
+            key = ("Power set", description)
+            if key in seen:
                 continue
+            seen.add(key)
+            add_block("Power set", description, f"power_set({match.group('set')}, PowerSet).")
 
-            i += 1
+        if "∅" in text:
+            add_block("Empty set", "∅", "empty_set([]).")
 
         if not queries:
             queries.append("% No specific queries generated from expression")
             queries.append("% You can manually add queries using the predicates defined above")
             queries.append("")
-            queries.append("% Example queries:")
+            queries.append("% Example member query:")
             queries.append(f"% member({element}, {set_a}).")
+            queries.append("% Example union query:")
             queries.append(f"% union({set_a}, {set_b}, Result).")
-            queries.append(f"% subset({set_a}, {set_b}).")
 
         return queries
     
