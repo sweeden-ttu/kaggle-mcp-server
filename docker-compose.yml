@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  fol-workbench:
+    build: .
+    container_name: fol-workbench
+    volumes:
+      # Local storage
+      - ./storage/local:/app/storage/local
+      # Network storage mount point
+      - ./storage/network:/app/storage/network
+      # Data directory
+      - ./data:/app/data
+      # Database
+      - ./data/db:/app/db
+      # GitHub storage
+      - ./storage/github:/app/storage/github
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DB_PATH=/app/db/fol_workbench.db
+      - STORAGE_LOCAL_PATH=/app/storage/local
+      - STORAGE_NETWORK_PATH=/app/storage/network
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    networks:
+      - fol-network
+
+  # Optional: PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    container_name: fol-postgres
+    environment:
+      - POSTGRES_DB=fol_workbench
+      - POSTGRES_USER=fol_user
+      - POSTGRES_PASSWORD=fol_password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - fol-network
+    restart: unless-stopped
+
+  # Optional: Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: fol-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - fol-network
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  fol-network:
+    driver: bridge

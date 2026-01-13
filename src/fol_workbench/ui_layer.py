@@ -9,13 +9,16 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QMessageBox, QFileDialog, QDialog,
     QLineEdit, QComboBox, QSpinBox, QFormLayout, QDialogButtonBox,
     QSplitter, QGroupBox, QPlainTextEdit, QStatusBar, QMenuBar, QMenu,
-    QToolBar, QAction, QHeaderView
+    QToolBar, QAction, QHeaderView, QInputDialog, QListWidget, QListWidgetItem
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt6.QtGui import QFont, QTextCharFormat, QColor, QSyntaxHighlighter, QTextCursor
 
 from .logic_layer import LogicEngine, ValidationResult, ValidationInfo
 from .data_layer import DataLayer, Checkpoint, ProjectMetadata
+from .predicate_dialog import PredicateDialog
+from .ikyke_format import IkykeFileFormat, IkykeWorkflow
+from .ikyke_protocol import IkykeProtocol
 
 
 class FormulaHighlighter(QSyntaxHighlighter):
@@ -185,6 +188,13 @@ class MainWindow(QMainWindow):
         self.logic_engine = LogicEngine()
         self.current_project: Optional[ProjectMetadata] = None
         
+        # Track all formulas for checkpoint restoration
+        self.tracked_formulas: List[str] = []
+        
+        # IKYKE workflow
+        self.current_ikyke_workflow: Optional[IkykeWorkflow] = None
+        self.ikyke_protocol: Optional[IkykeProtocol] = None
+        
         # Create UI
         self._create_menu_bar()
         self._create_toolbar()
@@ -231,6 +241,32 @@ class MainWindow(QMainWindow):
         
         file_menu.addSeparator()
         
+        # Dataset management
+        create_dataset_action = QAction("&Create Dataset", self)
+        create_dataset_action.triggered.connect(self._create_dataset)
+        file_menu.addAction(create_dataset_action)
+        
+        import_dataset_action = QAction("&Import Dataset Folder", self)
+        import_dataset_action.triggered.connect(self._import_dataset_folder)
+        file_menu.addAction(import_dataset_action)
+        
+        file_menu.addSeparator()
+        
+        # IKYKE workflow
+        new_ikyke_action = QAction("&New IKYKE Workflow", self)
+        new_ikyke_action.triggered.connect(self._new_ikyke_workflow)
+        file_menu.addAction(new_ikyke_action)
+        
+        open_ikyke_action = QAction("&Open IKYKE Workflow", self)
+        open_ikyke_action.triggered.connect(self._open_ikyke_workflow)
+        file_menu.addAction(open_ikyke_action)
+        
+        run_ikyke_action = QAction("&Run IKYKE Workflow", self)
+        run_ikyke_action.triggered.connect(self._run_ikyke_workflow)
+        file_menu.addAction(run_ikyke_action)
+        
+        file_menu.addSeparator()
+        
         exit_action = QAction("E&xit", self)
         exit_action.setShortcut("Ctrl+Q")
         exit_action.triggered.connect(self.close)
@@ -253,6 +289,12 @@ class MainWindow(QMainWindow):
         prove_action.setShortcut("F7")
         prove_action.triggered.connect(self._prove_implication)
         tools_menu.addAction(prove_action)
+        
+        tools_menu.addSeparator()
+        
+        define_predicate_action = QAction("&Define Predicate/Function", self)
+        define_predicate_action.triggered.connect(self._define_predicate)
+        tools_menu.addAction(define_predicate_action)
         
         # View menu
         view_menu = menubar.addMenu("&View")
@@ -431,7 +473,17 @@ class MainWindow(QMainWindow):
                 self.status_bar.showMessage(f"Opened project: {project_name}")
     
     def _save_checkpoint(self):
-        """Save current state as checkpoint."""
+        """
+        Save current state as checkpoint with complete formula tracking.
+        
+        This method saves:
+        - Main formula
+        - Constraint formulas
+        - All tracked formulas (for complete restoration)
+        
+        To restore, we load the checkpoint and re-apply all formulas using
+        logic_engine.restore_from_formulas(all_formulas).
+        """
         formula = self.formula_editor.get_formula()
         constraints = [
             line.strip() for line in self.constraints_editor.toPlainText().split('\n')
@@ -442,21 +494,54 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "No Content", "Please enter a formula or constraints.")
             return
         
+        # Collect all formulas for restoration
+        all_formulas = []
+        if formula:
+            all_formulas.append(formula)
+        all_formulas.extend(constraints)
+        
+        # Also include tracked formulas from the engine
+        tracked = self.logic_engine.get_tracked_formulas()
+        for f in tracked:
+            if f not in all_formulas:
+                all_formulas.append(f)
+        
         checkpoint = self.data_layer.save_checkpoint(
             formula=formula,
             constraints=constraints,
-            metadata={"project": self.current_project.name if self.current_project else None}
+            metadata={"project": self.current_project.name if self.current_project else None},
+            all_formulas=all_formulas
         )
         
         self._refresh_checkpoints()
         self.status_bar.showMessage(f"Saved checkpoint: {checkpoint.id}")
     
     def _load_checkpoint(self, checkpoint_id: str):
-        """Load a checkpoint."""
-        checkpoint = self.data_layer.load_checkpoint(checkpoint_id)
-        if checkpoint:
-            self.formula_editor.set_formula(checkpoint.formula)
-            self.constraints_editor.setPlainText('\n'.join(checkpoint.constraints))
+        """
+        Load a checkpoint and restore all formulas.
+        
+        This method:
+        1. Loads checkpoint data (including all_formulas)
+        2. Resets the logic engine
+        3. Re-applies all formulas using restore_from_formulas()
+        4. Updates the UI with the main formula and constraints
+        """
+        checkpoint_data = self.data_layer.load_checkpoint(checkpoint_id)
+        if checkpoint_data:
+            # Restore all formulas to the engine
+            all_formulas = checkpoint_data.get("all_formulas", [])
+            if all_formulas:
+                success, error = self.logic_engine.restore_from_formulas(all_formulas)
+                if not success:
+                    QMessageBox.warning(
+                        self,
+                        "Restore Warning",
+                        f"Some formulas could not be restored: {error}"
+                    )
+            
+            # Update UI
+            self.formula_editor.set_formula(checkpoint_data.get("formula", ""))
+            self.constraints_editor.setPlainText('\n'.join(checkpoint_data.get("constraints", [])))
             self.status_bar.showMessage(f"Loaded checkpoint: {checkpoint_id}")
     
     def _refresh_checkpoints(self):
@@ -478,7 +563,8 @@ class MainWindow(QMainWindow):
         """Perform validation (called asynchronously)."""
         try:
             self.logic_engine.reset()
-            success, error = self.logic_engine.add_formula(formula)
+            # Use tracking version to save formulas for checkpoints
+            success, error = self.logic_engine.add_formula_with_tracking(formula)
             
             if not success:
                 self._show_result(f"Error: {error}", None)
@@ -490,7 +576,7 @@ class MainWindow(QMainWindow):
                 if line.strip()
             ]
             for constraint in constraints:
-                success, error = self.logic_engine.add_formula(constraint)
+                success, error = self.logic_engine.add_formula_with_tracking(constraint)
                 if not success:
                     self._show_result(f"Error in constraint: {error}", None)
                     return
@@ -623,6 +709,164 @@ class MainWindow(QMainWindow):
             path = self.data_layer.save_smt_lib(smt_content, Path(filename).stem)
             self.status_bar.showMessage(f"Exported to: {path}")
     
+    def _define_predicate(self):
+        """Open dialog to define a new predicate or function."""
+        dialog = PredicateDialog(self)
+        result = dialog.get_predicate_info()
+        
+        if result:
+            name, arity, symbol_type, domain_types, codomain = result
+            try:
+                self.logic_engine.define_predicate(
+                    name=name,
+                    arity=arity,
+                    symbol_type=symbol_type,
+                    domain_types=domain_types,
+                    codomain=codomain
+                )
+                self.status_bar.showMessage(
+                    f"Defined {symbol_type.lower()}: {name} (arity={arity})"
+                )
+                QMessageBox.information(
+                    self,
+                    "Predicate Defined",
+                    f"Successfully defined {symbol_type.lower()} '{name}' with arity {arity}.\n"
+                    f"You can now use it in formulas."
+                )
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Failed to define predicate: {str(e)}")
+    
+    def _create_dataset(self):
+        """Create a new dataset with auto-generated name."""
+        name, ok = QInputDialog.getText(
+            self,
+            "Create Dataset",
+            "Dataset name (leave empty for auto-generated):"
+        )
+        
+        if ok:
+            if not name.strip():
+                name = None  # Auto-generate
+            
+            dataset_path = self.data_layer.create_dataset(name)
+            self.status_bar.showMessage(f"Created dataset: {dataset_path.name}")
+            QMessageBox.information(
+                self,
+                "Dataset Created",
+                f"Dataset created: {dataset_path.name}\n\n"
+                f"Location: {dataset_path}"
+            )
+    
+    def _import_dataset_folder(self):
+        """Import a folder as a dataset."""
+        folder_path = QFileDialog.getExistingDirectory(
+            self,
+            "Select Dataset Folder",
+            str(self.data_layer.datasets_dir)
+        )
+        
+        if folder_path:
+            folder = Path(folder_path)
+            dataset_path = self.data_layer.import_dataset_folder(folder)
+            
+            if dataset_path:
+                self.status_bar.showMessage(f"Imported dataset: {dataset_path.name}")
+                QMessageBox.information(
+                    self,
+                    "Dataset Imported",
+                    f"Successfully imported dataset: {dataset_path.name}\n\n"
+                    f"Location: {dataset_path}"
+                )
+            else:
+                QMessageBox.warning(self, "Import Error", "Failed to import dataset folder.")
+    
+    def _new_ikyke_workflow(self):
+        """Create a new IKYKE workflow."""
+        name, ok = QInputDialog.getText(
+            self,
+            "New IKYKE Workflow",
+            "Workflow name:"
+        )
+        
+        if ok and name:
+            workflow = IkykeFileFormat.create_default(name)
+            workflow.formulas = [self.formula_editor.get_formula()] if self.formula_editor.get_formula() else []
+            workflow.constraints = [
+                line.strip() for line in self.constraints_editor.toPlainText().split('\n')
+                if line.strip()
+            ]
+            
+            filename, _ = QFileDialog.getSaveFileName(
+                self,
+                "Save IKYKE Workflow",
+                "",
+                "IKYKE Files (*.ikyke);;All Files (*)"
+            )
+            
+            if filename:
+                IkykeFileFormat.save(workflow, filename)
+                self.current_ikyke_workflow = workflow
+                self.status_bar.showMessage(f"Created IKYKE workflow: {name}")
+    
+    def _open_ikyke_workflow(self):
+        """Open an existing IKYKE workflow."""
+        filename, _ = QFileDialog.getOpenFileName(
+            self,
+            "Open IKYKE Workflow",
+            "",
+            "IKYKE Files (*.ikyke);;All Files (*)"
+        )
+        
+        if filename:
+            try:
+                workflow = IkykeFileFormat.load(filename)
+                self.current_ikyke_workflow = workflow
+                self.status_bar.showMessage(f"Opened IKYKE workflow: {workflow.name}")
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Failed to load workflow: {str(e)}")
+    
+    def _run_ikyke_workflow(self):
+        """Run the current IKYKE workflow."""
+        if not self.current_ikyke_workflow:
+            QMessageBox.warning(
+                self,
+                "No Workflow",
+                "Please create or open an IKYKE workflow first."
+            )
+            return
+        
+        # Create protocol engine
+        self.ikyke_protocol = IkykeProtocol(
+            workflow=self.current_ikyke_workflow,
+            logic_engine=self.logic_engine,
+            data_layer=self.data_layer
+        )
+        
+        # Set up callbacks
+        self.ikyke_protocol.on_phase_change = lambda phase: self.status_bar.showMessage(
+            f"IKYKE Phase: {phase.value}"
+        )
+        self.ikyke_protocol.on_formula_result = lambda result: self._update_ikyke_results(result)
+        self.ikyke_protocol.on_save = lambda: self.status_bar.showMessage("IKYKE: Auto-saved")
+        
+        # Start workflow
+        self.ikyke_protocol.start()
+        self.status_bar.showMessage("IKYKE workflow started...")
+        
+        QMessageBox.information(
+            self,
+            "IKYKE Started",
+            f"IKYKE workflow '{self.current_ikyke_workflow.name}' has started.\n\n"
+            f"It will run for {self.current_ikyke_workflow.run.duration_min}-"
+            f"{self.current_ikyke_workflow.run.duration_max} minutes, then "
+            f"automatically evaluate, query, and analyze results."
+        )
+    
+    def _update_ikyke_results(self, result):
+        """Update UI with IKYKE formula result."""
+        # This could update a results panel or log
+        pass
+    
     def _show_about(self):
         """Show about dialog."""
         QMessageBox.about(
@@ -630,5 +874,6 @@ class MainWindow(QMainWindow):
             "About FOL Workbench",
             "FOL Workbench v1.0.0\n\n"
             "A professional tool for First-Order Logic validation and model proposal.\n\n"
-            "Built with PyQt6 and Z3 Solver."
+            "Built with PyQt6 and Z3 Solver.\n\n"
+            "Includes IKYKE protocol for automated workflows."
         )
