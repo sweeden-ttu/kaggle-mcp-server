@@ -16,6 +16,7 @@ from .perceptron_units import PerceptronUnit
 from .bayesian_perceptron_assigner import BayesianPerceptronAssigner
 from .feature_extractor import GridSquareFeatures
 from ..database import Database, Perceptron
+from ..logic_layer import LogicEngine, Z3_AVAILABLE
 
 
 @dataclass
@@ -177,6 +178,568 @@ class LearningPipeline:
         }
         
         return results
+
+    # ---------------------------------------------------------------------
+    # FOL Proof / Reasoning Pipeline (requested step order)
+    # ---------------------------------------------------------------------
+
+    @dataclass
+    class FOLPipelineResult:
+        """
+        Result of a proof-oriented FOL pipeline run.
+
+        This intentionally mirrors the requested steps:
+        - eliminate →/↔, push ¬ inward, standardize variables
+        - prenex
+        - skolemize
+        - CNF
+        - resolution/unification
+        - Horn/SLD
+        - Herbrand (+ optional Prolog emission)
+        - render
+        """
+
+        original: str
+        nnf_smt2: Optional[str] = None
+        pnf_smt2: Optional[str] = None
+        skolem_snf_smt2: Optional[str] = None
+        cnf_smt2: Optional[str] = None
+        resolution: Dict[str, Any] = field(default_factory=dict)
+        horn_sld: Dict[str, Any] = field(default_factory=dict)
+        herbrand: Dict[str, Any] = field(default_factory=dict)
+        render: Dict[str, str] = field(default_factory=dict)
+        errors: List[str] = field(default_factory=list)
+
+    def run_fol_pipeline(
+        self,
+        formula_str: str,
+        render_format: str = "markdown",
+        max_resolution_steps: int = 200,
+        herbrand_max_depth: int = 2,
+        herbrand_max_terms: int = 200,
+    ) -> Dict[str, Any]:
+        """
+        Run a proof-oriented First-Order Logic pipeline in the exact order requested.
+
+        Input:
+          - formula_str: Python/Z3-style (And/Or/Not/Implies/Iff/ForAll/Exists) or SMT-LIB.
+
+        Output:
+          - Dict with step artifacts, plus a rendered outermost visualization.
+
+        Notes:
+          - Uses Z3-backed transformations when available (`LogicEngine`).
+          - Resolution/SLD/Herbrand steps are "best-effort" and intentionally bounded.
+        """
+        out = self.FOLPipelineResult(original=formula_str)
+
+        if not Z3_AVAILABLE:
+            out.errors.append("Z3 is not available; cannot run prenex/skolem/CNF pipeline.")
+            return {"error": "Z3 not available", "result": out.__dict__}
+
+        engine = LogicEngine()
+        expr = engine.parse_formula(formula_str)
+        if expr is None:
+            out.errors.append("Failed to parse formula.")
+            return {"error": "parse_failed", "result": out.__dict__}
+
+        # 1) Eliminate →/↔, push ¬ inward (NNF), standardize variables uniquely.
+        #    - Implication / iff elimination + De Morgan + quantifier flipping is handled by _to_nnf_equiv.
+        #    - Variable standardization is handled via α-renaming during prenexing; we keep NNF here as evidence.
+        simplified = engine._apply_tactics_to_single_expr(expr, ["simplify"])
+        simplified = engine._normalize_quantifiers(simplified)
+        nnf_expr = engine._to_nnf_equiv(simplified)
+        out.nnf_smt2 = nnf_expr.sexpr()
+
+        # 2) Prenex: move quantifiers left; keep a quantifier-free matrix.
+        pnf_expr = engine._to_pnf(nnf_expr)
+        out.pnf_smt2 = pnf_expr.sexpr()
+
+        # 3) Skolemize ∃ (SNF): constants if no ∀ in scope, functions of in-scope ∀ otherwise.
+        #    Z3's SNF tactic performs the standard Skolemization transformation.
+        snf_expr = engine._apply_tactics_to_single_expr(expr, ["simplify", "nnf", "snf"])
+        out.skolem_snf_smt2 = snf_expr.sexpr()
+
+        # 4) CNF (when needed): distribute ∨ over ∧ (Tseitin is equisatisfiable and resolution-ready).
+        cnf_expr = engine._apply_tactics_to_single_expr(snf_expr, ["simplify", "tseitin-cnf"])
+        out.cnf_smt2 = cnf_expr.sexpr()
+
+        # 5) Resolution with unification; guard occurs-check pitfalls.
+        out.resolution = self._fol_resolution_best_effort(
+            engine=engine,
+            cnf_expr=cnf_expr,
+            step_limit=max_resolution_steps,
+        )
+
+        # 6) Horn / SLD: detect Hornness and emit Prolog-ish rules (leftmost, DFS/backtracking).
+        out.horn_sld = self._horn_sld_summary(engine=engine, cnf_expr=cnf_expr)
+
+        # 7) Herbrand: build universe/base (bounded), minimal-model perspective; optional Prolog emission.
+        out.herbrand = self._herbrand_summary(
+            engine=engine,
+            cnf_expr=cnf_expr,
+            max_depth=herbrand_max_depth,
+            max_terms=herbrand_max_terms,
+        )
+
+        # 8) Render outermost visualization.
+        out.render = self._render_pipeline(out, render_format=render_format)
+
+        return {"result": out.__dict__}
+
+    # ------------------------- FOL helpers (internal) -------------------------
+
+    def _is_literal(self, e: Any) -> bool:
+        """Z3 literal = atom or Not(atom), where atom is not And/Or/Implies/quantifier."""
+        from z3 import is_not, is_and, is_or, is_quantifier, is_implies  # type: ignore
+        if is_quantifier(e) or is_implies(e) or is_and(e) or is_or(e):
+            return False
+        if is_not(e):
+            a = e.arg(0)
+            return not (is_and(a) or is_or(a) or is_implies(a) or is_quantifier(a))
+        return True
+
+    def _split_cnf(self, cnf_expr: Any) -> List[List[Any]]:
+        """
+        Convert a Z3 CNF-ish expression into a clause list:
+          - [[lit1, lit2], [lit3], ...] representing ∧ of ∨ clauses.
+        """
+        from z3 import is_and, is_or  # type: ignore
+        clauses: List[List[Any]] = []
+
+        def as_clause(e: Any) -> List[Any]:
+            if is_or(e):
+                return [e.arg(i) for i in range(e.num_args())]
+            return [e]
+
+        if is_and(cnf_expr):
+            for i in range(cnf_expr.num_args()):
+                clauses.append(as_clause(cnf_expr.arg(i)))
+        else:
+            clauses.append(as_clause(cnf_expr))
+
+        # Filter obvious non-literals defensively.
+        cleaned: List[List[Any]] = []
+        for c in clauses:
+            lits = [l for l in c if self._is_literal(l)]
+            cleaned.append(lits)
+        return cleaned
+
+    def _lit_polarity_and_atom(self, lit: Any) -> Tuple[bool, Any]:
+        """Return (is_positive, atom) for a literal."""
+        from z3 import is_not  # type: ignore
+        if is_not(lit):
+            return False, lit.arg(0)
+        return True, lit
+
+    def _collect_bound_var_names(self, engine: LogicEngine, expr: Any) -> set:
+        """Collect bound variable names from leading quantifiers (best-effort)."""
+        from z3 import is_quantifier  # type: ignore
+        names = set()
+        e = expr
+        while is_quantifier(e):
+            vars_open, body_open, _ = engine._open_quantifier(e)
+            for v in vars_open:
+                try:
+                    names.add(v.decl().name())
+                except Exception:
+                    pass
+            e = body_open
+        return names
+
+    def _occurs_in(self, var: Any, term: Any) -> bool:
+        """Occurs check: does var appear anywhere inside term?"""
+        if term.eq(var):
+            return True
+        if hasattr(term, "num_args") and term.num_args() > 0:
+            for i in range(term.num_args()):
+                if self._occurs_in(var, term.arg(i)):
+                    return True
+        return False
+
+    def _unify_terms(self, a: Any, b: Any, subs: Dict[str, Any], var_names: set) -> Optional[Dict[str, Any]]:
+        """
+        Best-effort first-order unification on Z3 terms.
+        Variables are identified by being 0-arity Consts whose name is in var_names.
+        """
+        from z3 import substitute  # type: ignore
+
+        def is_var(t: Any) -> bool:
+            try:
+                return hasattr(t, "num_args") and t.num_args() == 0 and t.decl().name() in var_names
+            except Exception:
+                return False
+
+        # Apply current substitutions
+        if subs:
+            pairs = []
+            for k, v in subs.items():
+                try:
+                    # Recreate a Const-ish key by name using the existing term's sort
+                    # (we only ever call this with real Consts, so this is safe-ish).
+                    pass
+                except Exception:
+                    pass
+
+        # Structural unify
+        if a.eq(b):
+            return subs
+
+        if is_var(a):
+            name = a.decl().name()
+            if name in subs:
+                return self._unify_terms(subs[name], b, subs, var_names)
+            if self._occurs_in(a, b):
+                return None
+            subs[name] = b
+            return subs
+
+        if is_var(b):
+            name = b.decl().name()
+            if name in subs:
+                return self._unify_terms(a, subs[name], subs, var_names)
+            if self._occurs_in(b, a):
+                return None
+            subs[name] = a
+            return subs
+
+        # Function application unify
+        try:
+            if a.decl() != b.decl() or a.num_args() != b.num_args():
+                return None
+        except Exception:
+            return None
+
+        for i in range(a.num_args()):
+            subs = self._unify_terms(a.arg(i), b.arg(i), subs, var_names)
+            if subs is None:
+                return None
+        return subs
+
+    def _unify_atoms(self, a: Any, b: Any, var_names: set) -> Optional[Dict[str, Any]]:
+        """Unify two predicate atoms (same functor) returning substitutions, else None."""
+        try:
+            if a.decl() != b.decl() or a.num_args() != b.num_args():
+                return None
+        except Exception:
+            return None
+        subs: Dict[str, Any] = {}
+        for i in range(a.num_args()):
+            subs = self._unify_terms(a.arg(i), b.arg(i), subs, var_names)
+            if subs is None:
+                return None
+        return subs
+
+    def _apply_subs_to_expr(self, expr: Any, subs: Dict[str, Any]) -> Any:
+        """Apply substitutions {var_name -> term} to a Z3 expr (best-effort)."""
+        from z3 import substitute, Const  # type: ignore
+        pairs = []
+        for name, term in subs.items():
+            try:
+                pairs.append((Const(name, term.sort()), term))
+            except Exception:
+                continue
+        if not pairs:
+            return expr
+        return substitute(expr, *pairs)
+
+    def _fol_resolution_best_effort(self, engine: LogicEngine, cnf_expr: Any, step_limit: int) -> Dict[str, Any]:
+        """
+        Attempt first-order resolution on a CNF expression.
+        Returns a trace and whether an empty clause was derived.
+        """
+        clauses = self._split_cnf(cnf_expr)
+        var_names = self._collect_bound_var_names(engine, cnf_expr)
+
+        # If there are no quantifiers left, var_names may be empty; resolution still works propositionally.
+        derived: List[List[Any]] = [c[:] for c in clauses]
+        trace: List[Dict[str, Any]] = []
+
+        def clause_key(c: List[Any]) -> Tuple[str, ...]:
+            return tuple(sorted([str(l) for l in c]))
+
+        seen = {clause_key(c) for c in derived}
+
+        for step in range(step_limit):
+            progressed = False
+            n = len(derived)
+            for i in range(n):
+                for j in range(i + 1, n):
+                    c1, c2 = derived[i], derived[j]
+                    for lit1 in c1:
+                        p1, a1 = self._lit_polarity_and_atom(lit1)
+                        for lit2 in c2:
+                            p2, a2 = self._lit_polarity_and_atom(lit2)
+                            if p1 == p2:
+                                continue  # need complementary polarity
+
+                            subs = self._unify_atoms(a1, a2, var_names)
+                            if subs is None:
+                                continue
+
+                            # Build resolvent: (c1 \ {lit1}) ∪ (c2 \ {lit2}), then apply subs.
+                            new_clause = [l for l in c1 if not l.eq(lit1)] + [l for l in c2 if not l.eq(lit2)]
+                            new_clause = [self._apply_subs_to_expr(l, subs) for l in new_clause]
+
+                            # Remove duplicate literals (string-based)
+                            uniq = []
+                            seen_l = set()
+                            for l in new_clause:
+                                s = str(l)
+                                if s not in seen_l:
+                                    uniq.append(l)
+                                    seen_l.add(s)
+                            new_clause = uniq
+
+                            ck = clause_key(new_clause)
+                            if ck in seen:
+                                continue
+                            seen.add(ck)
+                            derived.append(new_clause)
+                            progressed = True
+
+                            trace.append({
+                                "step": step,
+                                "from": [i, j],
+                                "resolved": {"lit1": str(lit1), "lit2": str(lit2)},
+                                "subs": {k: str(v) for k, v in subs.items()},
+                                "resolvent": [str(l) for l in new_clause],
+                            })
+
+                            if len(new_clause) == 0:
+                                return {
+                                    "status": "unsat_via_resolution",
+                                    "empty_clause_derived": True,
+                                    "steps": trace,
+                                    "clause_count": len(derived),
+                                }
+                    if progressed and step % 5 == 0:
+                        # modest early exit opportunities
+                        pass
+            if not progressed:
+                break
+
+        return {
+            "status": "no_empty_clause_within_limit",
+            "empty_clause_derived": False,
+            "steps": trace,
+            "clause_count": len(derived),
+        }
+
+    def _horn_sld_summary(self, engine: LogicEngine, cnf_expr: Any) -> Dict[str, Any]:
+        """
+        Determine whether the clause set is Horn and, if so, emit Prolog-ish clauses.
+        """
+        from z3 import is_not  # type: ignore
+        clauses = self._split_cnf(cnf_expr)
+
+        horn = True
+        prolog_rules: List[str] = []
+        for c in clauses:
+            positives = []
+            negatives = []
+            for lit in c:
+                if is_not(lit):
+                    negatives.append(lit.arg(0))
+                else:
+                    positives.append(lit)
+            if len(positives) > 1:
+                horn = False
+                break
+
+            # Prolog form: Head :- Body.
+            # CNF Horn clauses correspond to (¬b1 ∨ ... ∨ ¬bn ∨ h) == (b1 ∧ ... ∧ bn) -> h
+            head = positives[0] if positives else None
+            body = negatives
+            if head is None:
+                # Goal clause: false :- b1, ..., bn.
+                if body:
+                    prolog_rules.append(f"false :- {', '.join([self._to_prolog_atom(b) for b in body])}.")
+                else:
+                    prolog_rules.append("false.")
+            else:
+                if body:
+                    prolog_rules.append(f"{self._to_prolog_atom(head)} :- {', '.join([self._to_prolog_atom(b) for b in body])}.")
+                else:
+                    prolog_rules.append(f"{self._to_prolog_atom(head)}.")
+
+        return {
+            "is_horn": horn,
+            "sld_strategy": {
+                "selection": "leftmost",
+                "search": "depth_first",
+                "backtracking": True,
+            },
+            "prolog_emission": prolog_rules if horn else [],
+        }
+
+    def _to_prolog_atom(self, atom: Any) -> str:
+        """Best-effort rendering of a Z3 predicate atom to a Prolog-ish functor(args)."""
+        try:
+            name = atom.decl().name()
+            if atom.num_args() == 0:
+                return name.lower()
+            args = []
+            for i in range(atom.num_args()):
+                args.append(str(atom.arg(i)))
+            return f"{name.lower()}({', '.join(args)})"
+        except Exception:
+            return str(atom)
+
+    def _herbrand_summary(self, engine: LogicEngine, cnf_expr: Any, max_depth: int, max_terms: int) -> Dict[str, Any]:
+        """
+        Build a bounded Herbrand universe and (bounded) base for the clause set.
+        """
+        # Extract constants (0-arity uninterpreted) and function symbols from terms in the CNF.
+        constants: set = set()
+        functions: Dict[str, int] = {}
+        predicates: Dict[str, int] = {}
+
+        def walk_term(t: Any):
+            try:
+                if hasattr(t, "num_args") and t.num_args() == 0:
+                    # Could be a constant/variable; include as constant candidate.
+                    constants.add(str(t))
+                    return
+                if hasattr(t, "decl"):
+                    functions[str(t.decl().name())] = int(t.num_args())
+                if hasattr(t, "num_args"):
+                    for i in range(t.num_args()):
+                        walk_term(t.arg(i))
+            except Exception:
+                return
+
+        clauses = self._split_cnf(cnf_expr)
+        for c in clauses:
+            for lit in c:
+                _, atom = self._lit_polarity_and_atom(lit)
+                try:
+                    predicates[str(atom.decl().name())] = int(atom.num_args())
+                    for i in range(atom.num_args()):
+                        walk_term(atom.arg(i))
+                except Exception:
+                    continue
+
+        # Ensure at least one constant (Herbrand universe is non-empty).
+        if not constants:
+            constants.add("c0")
+
+        # Build universe terms up to max_depth (very bounded).
+        universe = sorted(list(constants))
+        if functions:
+            current = list(universe)
+            for _d in range(max_depth):
+                next_terms: List[str] = []
+                for f, arity in functions.items():
+                    if arity <= 0:
+                        continue
+                    # Cartesian product (bounded)
+                    pools = [current] * arity
+                    def rec_build(idx: int, acc: List[str]):
+                        if len(universe) + len(next_terms) >= max_terms:
+                            return
+                        if idx == arity:
+                            next_terms.append(f"{f}({', '.join(acc)})")
+                            return
+                        for v in pools[idx]:
+                            rec_build(idx + 1, acc + [v])
+                    rec_build(0, [])
+                # Dedup + append
+                for t in next_terms:
+                    if t not in universe:
+                        universe.append(t)
+                        if len(universe) >= max_terms:
+                            break
+                current = list(universe)
+                if len(universe) >= max_terms:
+                    break
+
+        # Build a bounded Herbrand base: predicate applied to universe terms (bounded).
+        base: List[str] = []
+        for p, arity in predicates.items():
+            if arity == 0:
+                base.append(f"{p}()")
+                continue
+            pools = [universe] * arity
+            def rec_atoms(idx: int, acc: List[str]):
+                if len(base) >= max_terms:
+                    return
+                if idx == arity:
+                    base.append(f"{p}({', '.join(acc)})")
+                    return
+                for v in pools[idx]:
+                    rec_atoms(idx + 1, acc + [v])
+                    if len(base) >= max_terms:
+                        break
+            rec_atoms(0, [])
+            if len(base) >= max_terms:
+                break
+
+        return {
+            "herbrand_universe": universe[:max_terms],
+            "herbrand_base": base[:max_terms],
+            "bounds": {
+                "max_depth": max_depth,
+                "max_terms": max_terms,
+            },
+        }
+
+    def _render_pipeline(self, res: "LearningPipeline.FOLPipelineResult", render_format: str) -> Dict[str, str]:
+        """
+        Render an outermost visualization of the pipeline artifacts.
+        Supported: markdown | latex | raw_html (best-effort).
+        """
+        fmt = (render_format or "markdown").lower()
+
+        if fmt == "latex":
+            return {
+                "latex": "\n".join([
+                    r"\textbf{FOL Pipeline Output}\\",
+                    r"\textbf{Original:} " + res.original.replace("_", r"\_") + r"\\",
+                    r"\textbf{NNF (SMT2):} \texttt{" + (res.nnf_smt2 or "").replace("_", r"\_") + r"}\\",
+                    r"\textbf{PNF (SMT2):} \texttt{" + (res.pnf_smt2 or "").replace("_", r"\_") + r"}\\",
+                    r"\textbf{SNF (SMT2):} \texttt{" + (res.skolem_snf_smt2 or "").replace("_", r"\_") + r"}\\",
+                    r"\textbf{CNF (SMT2):} \texttt{" + (res.cnf_smt2 or "").replace("_", r"\_") + r"}\\",
+                ])
+            }
+
+        if fmt == "raw_html":
+            return {
+                "raw_html": "\n".join([
+                    "<h3>FOL Pipeline Output</h3>",
+                    f"<p><b>Original</b>: <code>{res.original}</code></p>",
+                    f"<p><b>NNF (SMT2)</b>: <code>{res.nnf_smt2 or ''}</code></p>",
+                    f"<p><b>PNF (SMT2)</b>: <code>{res.pnf_smt2 or ''}</code></p>",
+                    f"<p><b>SNF (SMT2)</b>: <code>{res.skolem_snf_smt2 or ''}</code></p>",
+                    f"<p><b>CNF (SMT2)</b>: <code>{res.cnf_smt2 or ''}</code></p>",
+                ])
+            }
+
+        # Default markdown render (with a light “table/tree/proof” feel).
+        md = []
+        md.append("### FOL Learning/Proof Pipeline")
+        md.append("")
+        md.append("- **Step 1 (NNF)**: eliminate →/↔, push ¬ inward")
+        md.append(f"  - `nnf_smt2`: `{(res.nnf_smt2 or '')[:300]}{'…' if res.nnf_smt2 and len(res.nnf_smt2) > 300 else ''}`")
+        md.append("- **Step 2 (Prenex)**: move quantifiers left")
+        md.append(f"  - `pnf_smt2`: `{(res.pnf_smt2 or '')[:300]}{'…' if res.pnf_smt2 and len(res.pnf_smt2) > 300 else ''}`")
+        md.append("- **Step 3 (Skolem/SNF)**: skolemize ∃")
+        md.append(f"  - `skolem_snf_smt2`: `{(res.skolem_snf_smt2 or '')[:300]}{'…' if res.skolem_snf_smt2 and len(res.skolem_snf_smt2) > 300 else ''}`")
+        md.append("- **Step 4 (CNF)**: resolution-ready CNF (Tseitin)")
+        md.append(f"  - `cnf_smt2`: `{(res.cnf_smt2 or '')[:300]}{'…' if res.cnf_smt2 and len(res.cnf_smt2) > 300 else ''}`")
+        md.append("- **Step 5 (Resolution)**")
+        md.append(f"  - status: `{res.resolution.get('status')}`; empty_clause: `{res.resolution.get('empty_clause_derived')}`; clauses: `{res.resolution.get('clause_count')}`")
+        md.append("- **Step 6 (Horn/SLD)**")
+        md.append(f"  - is_horn: `{res.horn_sld.get('is_horn')}`; prolog_rules: `{len(res.horn_sld.get('prolog_emission') or [])}`")
+        md.append("- **Step 7 (Herbrand)**")
+        md.append(f"  - universe_size: `{len(res.herbrand.get('herbrand_universe') or [])}`; base_size: `{len(res.herbrand.get('herbrand_base') or [])}`")
+        if res.errors:
+            md.append("")
+            md.append("- **Warnings**:")
+            for e in res.errors:
+                md.append(f"  - {e}")
+
+        return {"markdown": "\n".join(md)}
 
     def _unpack_example(
         self,
