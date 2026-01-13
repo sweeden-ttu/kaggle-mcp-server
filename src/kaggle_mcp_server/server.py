@@ -4,7 +4,7 @@ import json
 import os
 import re
 import subprocess
-from typing import Optional, List, Dict, Set
+from typing import Optional, List, Dict, Set, Any
 from mcp.server.fastmcp import FastMCP
 from kaggle.api.kaggle_api_extended import KaggleApi
 
@@ -560,6 +560,228 @@ def diff_against_main(
         return "git is not available on this system."
     except Exception as e:
         return f"Unexpected error running diff: {str(e)}"
+
+
+# Import reverse simulation system
+try:
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from fol_workbench.reverse_simulation_system import ReverseSimulationSystem
+    from fol_workbench.test_first_simulator import TestCase, TestStatus
+    REVERSE_SIMULATION_AVAILABLE = True
+except ImportError:
+    REVERSE_SIMULATION_AVAILABLE = False
+    ReverseSimulationSystem = None
+
+# Global reverse simulation system instance
+_reverse_sim_system = None
+
+def _get_reverse_sim_system():
+    """Get or create reverse simulation system instance."""
+    global _reverse_sim_system
+    if _reverse_sim_system is None and REVERSE_SIMULATION_AVAILABLE:
+        _reverse_sim_system = ReverseSimulationSystem()
+    return _reverse_sim_system
+
+
+@mcp.tool()
+def create_test_first_model(
+    name: str,
+    formula: str,
+    variables: Dict[str, str],
+    test_cases: List[Dict[str, Any]]
+) -> str:
+    """
+    Create a test-first unit model with test cases.
+    
+    Args:
+        name: Model name
+        formula: FOL formula (e.g., "And(x, y)")
+        variables: Dict mapping variable names to types (e.g., {"x": "Bool", "y": "Bool"})
+        test_cases: List of test case dicts with "name", "input", "expected_output", "constraints"
+    
+    Returns:
+        Success message with model details
+    """
+    if not REVERSE_SIMULATION_AVAILABLE:
+        return "Reverse simulation system not available. Install required dependencies."
+    
+    try:
+        system = _get_reverse_sim_system()
+        model = system.create_model_with_tests(name, formula, variables, test_cases)
+        
+        return json.dumps({
+            "status": "success",
+            "model_name": model.name,
+            "test_cases": len(model.test_cases),
+            "message": f"Created model '{name}' with {len(model.test_cases)} test cases"
+        }, indent=2)
+    except Exception as e:
+        return f"Error creating model: {str(e)}"
+
+
+@mcp.tool()
+def analyze_model_design(model_name: str) -> str:
+    """
+    Analyze a model's design and get intelligent feedback.
+    
+    Args:
+        model_name: Name of the model to analyze
+    
+    Returns:
+        JSON with feedback, topics, and proposals
+    """
+    if not REVERSE_SIMULATION_AVAILABLE:
+        return "Reverse simulation system not available."
+    
+    try:
+        system = _get_reverse_sim_system()
+        result = system.analyze_and_get_feedback(model_name)
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return f"Error analyzing model: {str(e)}"
+
+
+@mcp.tool()
+def test_hypothesis(
+    hypothesis_description: str,
+    model_name: str,
+    user_response: Optional[str] = None
+) -> str:
+    """
+    Test a hypothesis with the "getting warmer" feedback loop.
+    
+    Args:
+        hypothesis_description: Description of the hypothesis to test
+        model_name: Name of the model to test against
+        user_response: Optional user response ("yes"/"no") - if not provided, will prompt
+    
+    Returns:
+        JSON with hypothesis test results
+    """
+    if not REVERSE_SIMULATION_AVAILABLE:
+        return "Reverse simulation system not available."
+    
+    try:
+        system = _get_reverse_sim_system()
+        
+        # Create callback if user response provided
+        callback = None
+        if user_response:
+            def fixed_callback(msg):
+                return user_response
+            callback = fixed_callback
+        
+        result = system.test_hypothesis_with_feedback(
+            hypothesis_description,
+            model_name,
+            callback
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return f"Error testing hypothesis: {str(e)}"
+
+
+@mcp.tool()
+def generate_reverse_simulation_notebook(
+    model_name: str,
+    observed_outputs: List[Dict[str, Any]],
+    output_path: str = "reverse_simulation.ipynb"
+) -> str:
+    """
+    Generate a Kaggle notebook that simulates outputs and guesses inputs.
+    
+    Args:
+        model_name: Name of the model to reverse engineer
+        observed_outputs: List of observed output patterns (dicts with variable: value)
+        output_path: Path to save the notebook
+    
+    Returns:
+        Success message with notebook path
+    """
+    if not REVERSE_SIMULATION_AVAILABLE:
+        return "Reverse simulation system not available."
+    
+    try:
+        system = _get_reverse_sim_system()
+        path = system.generate_reverse_simulation_notebook(
+            model_name,
+            observed_outputs,
+            Path(output_path)
+        )
+        return f"Successfully generated notebook at {path}"
+    except Exception as e:
+        return f"Error generating notebook: {str(e)}"
+
+
+@mcp.tool()
+def propose_next_steps(model_name: str) -> str:
+    """
+    Propose next steps for model development based on current state.
+    
+    Args:
+        model_name: Name of the model
+    
+    Returns:
+        JSON with prioritized next steps
+    """
+    if not REVERSE_SIMULATION_AVAILABLE:
+        return "Reverse simulation system not available."
+    
+    try:
+        system = _get_reverse_sim_system()
+        steps = system.propose_next_steps(model_name)
+        return json.dumps(steps, indent=2)
+    except Exception as e:
+        return f"Error proposing next steps: {str(e)}"
+
+
+@mcp.tool()
+def run_hypothesis_loop(
+    hypothesis_description: str,
+    model_name: str,
+    max_steps: int = 10,
+    user_responses: Optional[List[str]] = None
+) -> str:
+    """
+    Run the complete hypothesis testing loop with backtracking.
+    
+    Args:
+        hypothesis_description: Initial hypothesis description
+        model_name: Name of the model
+        max_steps: Maximum number of steps
+        user_responses: Optional list of user responses for each step
+    
+    Returns:
+        JSON with final hypothesis and steps
+    """
+    if not REVERSE_SIMULATION_AVAILABLE:
+        return "Reverse simulation system not available."
+    
+    try:
+        system = _get_reverse_sim_system()
+        
+        # Create callback with responses
+        response_iter = iter(user_responses) if user_responses else None
+        
+        def callback(msg):
+            if response_iter:
+                try:
+                    return next(response_iter)
+                except StopIteration:
+                    return "no"  # Default to no if responses exhausted
+            return "yes"  # Default to yes for auto-mode
+        
+        result = system.run_hypothesis_loop(
+            hypothesis_description,
+            model_name,
+            max_steps,
+            callback
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return f"Error running hypothesis loop: {str(e)}"
 
 
 def main():

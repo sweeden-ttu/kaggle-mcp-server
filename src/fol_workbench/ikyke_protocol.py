@@ -16,7 +16,7 @@ import time
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, Callable, Dict, Any, List
+from typing import Optional, Callable, Dict, Any, List, Union
 from queue import Queue
 
 from .ikyke_format import (
@@ -44,7 +44,7 @@ class IkykeProtocol:
         workflow: IkykeWorkflow,
         logic_engine: LogicEngine,
         data_layer: DataLayer,
-        container_path: Optional[Path] = None
+        container_path: Optional[Union[str, Path]] = None
     ):
         """
         Initialize the IKYKE protocol engine.
@@ -53,11 +53,15 @@ class IkykeProtocol:
             workflow: IkykeWorkflow definition
             logic_engine: LogicEngine instance for formula evaluation
             data_layer: DataLayer instance for persistence
-            container_path: Optional path to container file
+            container_path: Optional path to container file (str or Path)
         """
         self.workflow = workflow
         self.logic_engine = logic_engine
         self.data_layer = data_layer
+        
+        # Convert string path to Path object if needed
+        if container_path is not None and isinstance(container_path, str):
+            container_path = Path(container_path)
         
         # Create or load container
         if container_path and container_path.exists():

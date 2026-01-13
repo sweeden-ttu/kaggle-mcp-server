@@ -23,6 +23,7 @@ from .ikyke_protocol import IkykeProtocol
 from .hypothesis_dialog import HypothesisExperimentDialog
 from .autocomplete import SuggestionEngine
 from .autocomplete_widget import AutocompleteManager
+from .ml_strategy_dialog import MLStrategyDialog
 
 
 class FormulaHighlighter(QSyntaxHighlighter):
@@ -330,6 +331,14 @@ class MainWindow(QMainWindow):
         select_hypothesis_action.setShortcut("Ctrl+H")
         select_hypothesis_action.triggered.connect(self._select_hypothesis_experiment)
         tools_menu.addAction(select_hypothesis_action)
+        
+        tools_menu.addSeparator()
+        
+        # ML Strategy System
+        ml_strategy_action = QAction("&ML Strategy System", self)
+        ml_strategy_action.setShortcut("Ctrl+M")
+        ml_strategy_action.triggered.connect(self._open_ml_strategy)
+        tools_menu.addAction(ml_strategy_action)
         
         tools_menu.addSeparator()
         
@@ -971,6 +980,11 @@ class MainWindow(QMainWindow):
                 
                 if response == QMessageBox.StandardButton.Yes:
                     self._run_ikyke_workflow()
+    
+    def _open_ml_strategy(self):
+        """Open ML Strategy System dialog."""
+        dialog = MLStrategyDialog(self)
+        dialog.exec()
     
     def _on_suggestion_selected(self, text: str):
         """Handle when user selects an autocomplete suggestion."""

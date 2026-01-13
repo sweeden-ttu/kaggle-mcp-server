@@ -10,7 +10,6 @@ from typing import Dict, List, Optional, Tuple, Any, Set
 from dataclasses import dataclass, field
 from enum import Enum
 from collections import defaultdict
-import numpy as np
 import json
 from pathlib import Path
 from datetime import datetime
