@@ -1,4 +1,4 @@
-f"""
+"""
 Bayesian Feature Extractor with Layered Class Collections
 
 Implements a novel ML strategy using Bayesian feature extractors that organize
@@ -40,7 +40,9 @@ class Attribute:
             "name": self.name,
             "type": self.attr_type.value,
             "value": self.value,
-            "confidence": self.confidence
+            "confidence": self.confidence,
+            "prior_distribution": self.prior_distribution,
+            "posterior_distribution": self.posterior_distribution
         }
     
     @classmethod
@@ -50,7 +52,9 @@ class Attribute:
             name=data["name"],
             attr_type=AttributeType(data["type"]),
             value=data.get("value"),
-            confidence=data.get("confidence", 0.0)
+            confidence=data.get("confidence", 0.0),
+            prior_distribution=data.get("prior_distribution"),
+            posterior_distribution=data.get("posterior_distribution")
         )
 
 
@@ -278,7 +282,14 @@ class BayesianFeatureExtractor:
         class_name: str,
         prior: Dict[str, float]
     ):
-        """Update Bayesian prior distribution for a class."""
+        """
+        Update Bayesian prior distribution for a class.
+        
+        Args:
+            layer_id: ID of the layer containing the class
+            class_name: Name of the class to update
+            prior: Dictionary mapping attribute names or values to prior probabilities
+        """
         layer = self.layers.get(layer_id)
         if not layer:
             raise ValueError(f"Layer {layer_id} does not exist")
@@ -287,14 +298,34 @@ class BayesianFeatureExtractor:
         if not class_layer:
             raise ValueError(f"Class {class_name} not found in layer {layer_id}")
         
-        class_layer.bayesian_prior = prior
+        # Update class-level prior
+        class_layer.bayesian_prior.update(prior)
         
-        # Update attribute priors
+        # Update attribute-level priors
         for attr in class_layer.attributes:
+            # If prior contains this attribute name, update its distribution
             if attr.name in prior:
                 if attr.prior_distribution is None:
                     attr.prior_distribution = {}
+                # Store the prior probability for this attribute
                 attr.prior_distribution[attr.name] = prior[attr.name]
+            # Also check if prior contains values for this attribute
+            # (e.g., {"attr_name_value1": 0.3, "attr_name_value2": 0.7})
+            for key, value in prior.items():
+                if key.startswith(attr.name + "_"):
+                    if attr.prior_distribution is None:
+                        attr.prior_distribution = {}
+                    attr.prior_distribution[key] = value
+        
+        # Normalize class-level prior if needed
+        if class_layer.bayesian_prior:
+            total = sum(class_layer.bayesian_prior.values())
+            if total > 0:
+                class_layer.bayesian_prior = {
+                    k: v / total for k, v in class_layer.bayesian_prior.items()
+                }
+        
+        self.log_entry(f"Updated Bayesian prior for {class_name} in layer {layer_id}")
     
     def extract_features(self, data: Dict[str, Any], layer_id: int) -> Dict[str, Any]:
         """Extract features using Bayesian inference for a given layer."""
@@ -332,27 +363,42 @@ class BayesianFeatureExtractor:
         return features
     
     def _bayesian_update(self, attr: Attribute, data: Dict[str, Any]) -> Dict[str, float]:
-        """Perform Bayesian update on attribute distribution."""
-        # Simple Bayesian update implementation
-        # In a real system, this would use proper Bayesian inference
+        """
+        Perform Bayesian update on attribute distribution.
         
+        Uses simple Bayesian update: P(hypothesis|evidence) ∝ P(evidence|hypothesis) * P(hypothesis)
+        For simplicity, we use a likelihood function that boosts observed values.
+        """
         if not attr.prior_distribution:
             return {}
         
+        # Start with prior
         posterior = attr.prior_distribution.copy()
         
-        # Update based on observed data
+        # Update based on observed data (likelihood update)
         if attr.name in data:
-            observed_value = data[attr.name]
+            observed_value = str(data[attr.name])  # Convert to string for consistency
+            
+            # If we have a prior for this value, update it
             if observed_value in posterior:
-                posterior[observed_value] *= 1.5  # Boost observed value
+                # Bayesian update: multiply by likelihood (boost factor)
+                posterior[observed_value] *= 1.5
             else:
-                posterior[observed_value] = 0.1  # Add new value with low probability
+                # New value: add with low prior probability
+                posterior[observed_value] = 0.1
+            
+            # Slight decay for unobserved values (optional, for normalization)
+            for key in posterior:
+                if key != observed_value:
+                    posterior[key] *= 0.95
         
-        # Normalize
+        # Normalize to ensure probabilities sum to 1
         total = sum(posterior.values())
         if total > 0:
             posterior = {k: v / total for k, v in posterior.items()}
+        else:
+            # Fallback: uniform distribution if all values are zero
+            posterior = {k: 1.0 / len(posterior) for k in posterior.keys()}
         
         return posterior
     
@@ -365,19 +411,36 @@ class BayesianFeatureExtractor:
         return self.vocabulary_universe.copy()
     
     def save(self, filepath: Path):
-        """Save the feature extractor to a file."""
+        """
+        Save the feature extractor to a file.
+        
+        Args:
+            filepath: Path to save the JSON file
+        """
         data = {
-            "layers": {lid: layer.to_dict() for lid, layer in self.layers.items()},
+            "layers": {str(lid): layer.to_dict() for lid, layer in self.layers.items()},
             "layer_order": self.layer_order,
             "vocabulary_universe": list(self.vocabulary_universe),
-            "log_history": self.log_history
+            "log_history": self.log_history,
+            "metadata": {
+                "saved_at": datetime.now().isoformat(),
+                "num_layers": len(self.layers),
+                "vocabulary_size": len(self.vocabulary_universe)
+            }
         }
         
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+        
+        self.log_entry(f"Saved feature extractor to {filepath}")
     
     def load(self, filepath: Path):
-        """Load the feature extractor from a file."""
+        """
+        Load the feature extractor from a file.
+        
+        Args:
+            filepath: Path to load the JSON file from
+        """
         with open(filepath, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
@@ -389,7 +452,28 @@ class BayesianFeatureExtractor:
         self.layer_order = data.get("layer_order", [])
         self.vocabulary_universe = set(data.get("vocabulary_universe", []))
         self.log_history = data.get("log_history", [])
+        
+        self.log_entry(f"Loaded feature extractor from {filepath}")
     
     def get_log(self) -> str:
-        """Get the learning log."""
+        """
+        Get the learning log.
+        
+        Returns:
+            String containing all log entries, one per line
+        """
         return "\n".join(self.log_history)
+    
+    def get_log_entries(self) -> List[str]:
+        """
+        Get the learning log as a list of entries.
+        
+        Returns:
+            List of log entry strings
+        """
+        return self.log_history.copy()
+    
+    def clear_log(self):
+        """Clear the learning log."""
+        self.log_history = []
+        self.log_entry("Log cleared")
