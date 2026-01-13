@@ -1,0 +1,415 @@
+{
+  "layers": {
+    "1": {
+      "layer_id": 1,
+      "layer_name": "Base Layer",
+      "classes": {
+        "Animal": {
+          "class_name": "Animal",
+          "layer_id": 1,
+          "attributes": [
+            {
+              "name": "species",
+              "type": "categorical",
+              "value": "unknown",
+              "confidence": 0.0,
+              "prior_distribution": {
+                "species": 0.4
+              },
+              "posterior_distribution": null
+            },
+            {
+              "name": "age",
+              "type": "numerical",
+              "value": 0,
+              "confidence": 0.0,
+              "prior_distribution": {
+                "age": 0.6
+              },
+              "posterior_distribution": null
+            },
+            {
+              "name": "is_mammal",
+              "type": "boolean",
+              "value": false,
+              "confidence": 0.0,
+              "prior_distribution": {
+                "is_mammal": 0.3
+              },
+              "posterior_distribution": null
+            },
+            {
+              "name": "habitat",
+              "type": "text",
+              "value": "unknown",
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            }
+          ],
+          "parent_classes": [],
+          "bayesian_prior": {
+            "species": 0.3076923076923077,
+            "age": 0.4615384615384615,
+            "is_mammal": 0.23076923076923075
+          }
+        },
+        "Plant": {
+          "class_name": "Plant",
+          "layer_id": 1,
+          "attributes": [
+            {
+              "name": "genus",
+              "type": "categorical",
+              "value": "unknown",
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            },
+            {
+              "name": "height",
+              "type": "numerical",
+              "value": 0.0,
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            },
+            {
+              "name": "is_flowering",
+              "type": "boolean",
+              "value": false,
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            }
+          ],
+          "parent_classes": [],
+          "bayesian_prior": {}
+        }
+      },
+      "constraints": [],
+      "vocabulary": [
+        "genus",
+        "is_flowering",
+        "species",
+        "is_mammal",
+        "age",
+        "Plant",
+        "height",
+        "habitat",
+        "Animal"
+      ]
+    },
+    "2": {
+      "layer_id": 2,
+      "layer_name": "Feature Layer",
+      "classes": {
+        "Mammal": {
+          "class_name": "Mammal",
+          "layer_id": 2,
+          "attributes": [
+            {
+              "name": "fur_color",
+              "type": "categorical",
+              "value": "unknown",
+              "confidence": 0.3,
+              "prior_distribution": {
+                "fur_color_brown": 0.3,
+                "fur_color_black": 0.2,
+                "fur_color_white": 0.2,
+                "fur_color_gray": 0.15,
+                "fur_color_other": 0.15
+              },
+              "posterior_distribution": {
+                "fur_color_brown": 0.3,
+                "fur_color_black": 0.2,
+                "fur_color_white": 0.2,
+                "fur_color_gray": 0.15,
+                "fur_color_other": 0.15
+              }
+            },
+            {
+              "name": "weight",
+              "type": "numerical",
+              "value": 0.0,
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            },
+            {
+              "name": "species",
+              "type": "categorical",
+              "value": null,
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            },
+            {
+              "name": "age",
+              "type": "numerical",
+              "value": null,
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            },
+            {
+              "name": "is_mammal",
+              "type": "boolean",
+              "value": null,
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            },
+            {
+              "name": "diet",
+              "type": "categorical",
+              "value": "omnivore",
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            }
+          ],
+          "parent_classes": [
+            "Animal"
+          ],
+          "bayesian_prior": {
+            "fur_color_brown": 0.3,
+            "fur_color_black": 0.2,
+            "fur_color_white": 0.2,
+            "fur_color_gray": 0.15,
+            "fur_color_other": 0.15
+          }
+        },
+        "Tree": {
+          "class_name": "Tree",
+          "layer_id": 2,
+          "attributes": [
+            {
+              "name": "trunk_diameter",
+              "type": "numerical",
+              "value": 0.0,
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            },
+            {
+              "name": "leaf_type",
+              "type": "categorical",
+              "value": "unknown",
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            },
+            {
+              "name": "genus",
+              "type": "categorical",
+              "value": null,
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            },
+            {
+              "name": "height",
+              "type": "numerical",
+              "value": null,
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            },
+            {
+              "name": "is_flowering",
+              "type": "boolean",
+              "value": null,
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            }
+          ],
+          "parent_classes": [
+            "Plant"
+          ],
+          "bayesian_prior": {}
+        }
+      },
+      "constraints": [],
+      "vocabulary": [
+        "genus",
+        "Mammal",
+        "is_flowering",
+        "species",
+        "is_mammal",
+        "Tree",
+        "weight",
+        "fur_color",
+        "age",
+        "leaf_type",
+        "diet",
+        "height",
+        "trunk_diameter"
+      ]
+    },
+    "3": {
+      "layer_id": 3,
+      "layer_name": "Advanced Layer",
+      "classes": {
+        "Dog": {
+          "class_name": "Dog",
+          "layer_id": 3,
+          "attributes": [
+            {
+              "name": "breed",
+              "type": "categorical",
+              "value": "unknown",
+              "confidence": 0.2714285714285714,
+              "prior_distribution": {
+                "breed_labrador": 0.25,
+                "breed_golden_retriever": 0.2,
+                "breed_german_shepherd": 0.15,
+                "breed_bulldog": 0.1,
+                "breed_other": 0.3
+              },
+              "posterior_distribution": {
+                "breed_labrador": 0.22619047619047616,
+                "breed_golden_retriever": 0.18095238095238095,
+                "breed_german_shepherd": 0.1357142857142857,
+                "breed_bulldog": 0.09047619047619047,
+                "breed_other": 0.2714285714285714,
+                "labrador": 0.09523809523809523
+              }
+            },
+            {
+              "name": "is_trained",
+              "type": "boolean",
+              "value": false,
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            },
+            {
+              "name": "fur_color",
+              "type": "categorical",
+              "value": null,
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            },
+            {
+              "name": "weight",
+              "type": "numerical",
+              "value": null,
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            },
+            {
+              "name": "species",
+              "type": "categorical",
+              "value": null,
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            },
+            {
+              "name": "age",
+              "type": "numerical",
+              "value": null,
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            },
+            {
+              "name": "is_mammal",
+              "type": "boolean",
+              "value": null,
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            },
+            {
+              "name": "owner_name",
+              "type": "text",
+              "value": "unknown",
+              "confidence": 0.0,
+              "prior_distribution": null,
+              "posterior_distribution": null
+            }
+          ],
+          "parent_classes": [
+            "Mammal"
+          ],
+          "bayesian_prior": {
+            "breed_labrador": 0.25,
+            "breed_golden_retriever": 0.2,
+            "breed_german_shepherd": 0.15,
+            "breed_bulldog": 0.1,
+            "breed_other": 0.3
+          }
+        }
+      },
+      "constraints": [],
+      "vocabulary": [
+        "Dog",
+        "species",
+        "is_mammal",
+        "is_trained",
+        "breed",
+        "weight",
+        "fur_color",
+        "age",
+        "owner_name"
+      ]
+    }
+  },
+  "layer_order": [
+    1,
+    2,
+    3
+  ],
+  "vocabulary_universe": [
+    "genus",
+    "Dog",
+    "is_trained",
+    "weight",
+    "fur_color",
+    "leaf_type",
+    "height",
+    "owner_name",
+    "trunk_diameter",
+    "Animal",
+    "Mammal",
+    "species",
+    "is_mammal",
+    "Tree",
+    "breed",
+    "age",
+    "diet",
+    "Plant",
+    "is_flowering",
+    "habitat"
+  ],
+  "log_history": [
+    "[2026-01-12T22:46:58.610870] BEGIN S LEARNING",
+    "[2026-01-12T22:46:58.610889] Created layer 1: Base Layer",
+    "[2026-01-12T22:46:58.610893] Created layer 2: Feature Layer",
+    "[2026-01-12T22:46:58.610895] Created layer 3: Advanced Layer",
+    "[2026-01-12T22:46:58.610906] Added class Animal to layer 1",
+    "[2026-01-12T22:46:58.610912] Added class Plant to layer 1",
+    "[2026-01-12T22:46:58.610920] Added class Mammal to layer 2",
+    "[2026-01-12T22:46:58.610926] Added class Tree to layer 2",
+    "[2026-01-12T22:46:58.610932] Added class Dog to layer 3",
+    "[2026-01-12T22:46:58.610936] Assigned attribute habitat to Animal in layer 1",
+    "[2026-01-12T22:46:58.610939] Assigned attribute diet to Mammal in layer 2",
+    "[2026-01-12T22:46:58.610941] Assigned attribute owner_name to Dog in layer 3",
+    "[2026-01-12T22:46:58.610951] Updated Bayesian prior for Animal in layer 1",
+    "[2026-01-12T22:46:58.610958] Updated Bayesian prior for Mammal in layer 2",
+    "[2026-01-12T22:46:58.610964] Updated Bayesian prior for Dog in layer 3",
+    "[2026-01-12T22:46:58.610978] Extracted features for layer 3",
+    "[2026-01-12T22:46:58.610999] Extracted features for layer 2",
+    "[2026-01-12T22:46:58.611013] Extracted features for layer 2"
+  ],
+  "metadata": {
+    "saved_at": "2026-01-12T22:46:58.611050",
+    "num_layers": 3,
+    "vocabulary_size": 20
+  }
+}
