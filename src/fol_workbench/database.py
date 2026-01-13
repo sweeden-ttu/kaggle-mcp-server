@@ -467,3 +467,42 @@ class Database:
             if self.delete_perceptron(perceptron.perceptron_id):
                 count += 1
         return count
+
+    def list_perceptrons_sorted(
+        self,
+        descending: bool = True
+    ) -> List[Perceptron]:
+        """
+        Return all perceptrons sorted by a combined quality score.
+
+        Score heuristic: average of confidence and accuracy.
+        """
+        def score(p: Perceptron) -> float:
+            return (float(p.confidence) + float(p.accuracy)) / 2.0
+
+        return sorted(self.perceptrons.values(), key=score, reverse=descending)
+
+    def get_top_perceptrons(self, k: int = 3) -> List[Perceptron]:
+        """Return the top-k perceptrons by combined quality score."""
+        if k <= 0:
+            return []
+        return self.list_perceptrons_sorted(descending=True)[:k]
+
+    def get_worst_perceptron(self) -> Optional[Perceptron]:
+        """Return the single worst perceptron by combined quality score."""
+        perceptrons = self.list_perceptrons_sorted(descending=False)
+        return perceptrons[0] if perceptrons else None
+
+    def delete_worst_perceptron(self) -> Optional[str]:
+        """
+        Delete the worst perceptron by combined quality score.
+
+        Returns:
+            The deleted perceptron_id if one was deleted, else None.
+        """
+        worst = self.get_worst_perceptron()
+        if not worst:
+            return None
+        if self.delete_perceptron(worst.perceptron_id):
+            return worst.perceptron_id
+        return None

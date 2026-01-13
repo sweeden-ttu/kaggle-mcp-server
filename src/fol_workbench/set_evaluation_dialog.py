@@ -12,10 +12,13 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QPushButton,
     QTextEdit, QLabel, QGroupBox, QFormLayout, QLineEdit, QMessageBox,
-    QFileDialog, QGridLayout, QScrollArea, QSplitter, QPlainTextEdit
+    QFileDialog, QGridLayout, QScrollArea, QSplitter, QPlainTextEdit, QInputDialog
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QTextCharFormat, QColor
+
+from .database import Database
+from .ml_strategy_integration import MLStrategySystem
 
 
 class SetSymbolButton(QPushButton):
@@ -44,7 +47,12 @@ class SetSymbolButton(QPushButton):
 class SetEvaluationDialog(QDialog):
     """Main dialog for Set Evaluation System with Prolog generation."""
     
-    def __init__(self, parent=None):
+    def __init__(
+        self,
+        parent=None,
+        database: Optional[Database] = None,
+        ml_system: Optional[MLStrategySystem] = None
+    ):
         super().__init__(parent)
         self.setWindowTitle("Set Evaluation - Prolog Generator")
         self.setMinimumSize(1200, 800)
@@ -54,6 +62,10 @@ class SetEvaluationDialog(QDialog):
         
         # Prolog code generator
         self.prolog_code: str = ""
+
+        # Perceptron storage / ranking (human-in-the-loop)
+        self.database = database or Database()
+        self.ml_system = ml_system or MLStrategySystem()
         
         self._setup_ui()
     
@@ -86,6 +98,10 @@ class SetEvaluationDialog(QDialog):
         generate_btn.clicked.connect(self._generate_prolog)
         button_layout.addWidget(generate_btn)
         
+        human_eval_btn = QPushButton("Human Evaluate (Perceptrons)")
+        human_eval_btn.clicked.connect(self._human_evaluate_perceptrons)
+        button_layout.addWidget(human_eval_btn)
+
         save_btn = QPushButton("Save Prolog File")
         save_btn.clicked.connect(self._save_prolog_file)
         button_layout.addWidget(save_btn)
@@ -379,6 +395,19 @@ class SetEvaluationDialog(QDialog):
         self.preview_display.setFont(QFont("Courier New", 10))
         self.preview_display.setMaximumHeight(150)
         layout.addWidget(self.preview_display)
+
+        # ULLM re-evaluation display
+        ullm_label = QLabel("ULLM Re-evaluation (performance-optimized):")
+        ullm_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        layout.addWidget(ullm_label)
+
+        self.ullm_display = QPlainTextEdit()
+        self.ullm_display.setFont(QFont("Courier New", 10))
+        self.ullm_display.setPlaceholderText(
+            "After human evaluation (select top perceptrons / delete worst), "
+            "the ULLM re-evaluation output will appear here..."
+        )
+        layout.addWidget(self.ullm_display)
         
         return widget
     
@@ -551,6 +580,19 @@ class SetEvaluationDialog(QDialog):
         self.preview_display.setHtml(preview_text)
         
         QMessageBox.information(self, "Generated", "Prolog code generated successfully!")
+
+        # Optional human-in-the-loop step right after generation
+        response = QMessageBox.question(
+            self,
+            "Human Evaluation",
+            "Human evaluation step:\n\n"
+            "Please select the top perceptrons.\n"
+            "Then: Please delete the worst perceptron.\n\n"
+            "Run this now?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if response == QMessageBox.StandardButton.Yes:
+            self._human_evaluate_perceptrons()
     
     def _parse_expression_to_prolog(self, expr: str, set_a: str, set_b: str, element: str) -> List[str]:
         """Parse expression and generate Prolog queries."""
@@ -716,6 +758,106 @@ class SetEvaluationDialog(QDialog):
             queries.append(f"% subset({set_a}, {set_b}).")
         
         return queries
+
+    def _human_evaluate_perceptrons(self):
+        """
+        Human-in-the-loop workflow:
+        1) "Please select the top perceptrons"
+        2) "Please delete the worst perceptron"
+        3) Re-evaluate the ULLM (optimized for performance)
+        """
+        perceptrons = self.database.list_perceptrons_sorted(descending=True)
+        if not perceptrons:
+            QMessageBox.information(
+                self,
+                "No Perceptrons",
+                "No perceptrons are currently stored in the database.\n\n"
+                "Run the puzzle detection learning pipeline first to create perceptrons."
+            )
+            return
+
+        # Step 1: Select top perceptrons (human decides K)
+        k_default = min(3, len(perceptrons))
+        k, ok = QInputDialog.getInt(
+            self,
+            "Please select the top perceptrons",
+            "How many top perceptrons should be selected?",
+            k_default,
+            1,
+            len(perceptrons),
+            1
+        )
+        if not ok:
+            return
+
+        selected = perceptrons[:k]
+        selected_ids = [p.perceptron_id for p in selected]
+
+        # Step 2: Delete worst perceptron (default choice = worst among non-selected)
+        remaining = [p for p in perceptrons if p.perceptron_id not in selected_ids]
+        if not remaining:
+            remaining = perceptrons[:]  # fallback: allow deletion from all
+
+        # Worst is last in descending list (or first in ascending of remaining)
+        remaining_sorted = sorted(
+            remaining,
+            key=lambda p: (float(p.confidence) + float(p.accuracy)) / 2.0,
+            reverse=False
+        )
+        worst = remaining_sorted[0]
+
+        options = [
+            f"{p.perceptron_id}  (acc={p.accuracy:.2f}, conf={p.confidence:.2f})"
+            for p in remaining_sorted
+        ]
+        default_index = 0
+        choice, ok = QInputDialog.getItem(
+            self,
+            "Please delete the worst perceptron",
+            "Select the perceptron to delete:",
+            options,
+            default_index,
+            False
+        )
+        if not ok:
+            return
+
+        chosen_id = choice.split()[0].strip()
+        confirm = QMessageBox.question(
+            self,
+            "Confirm Deletion",
+            f"Delete perceptron:\n\n{chosen_id}\n\nProceed?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        deleted_id: Optional[str] = None
+        if confirm == QMessageBox.StandardButton.Yes:
+            if self.database.delete_perceptron(chosen_id):
+                deleted_id = chosen_id
+            else:
+                QMessageBox.warning(self, "Delete Failed", f"Could not delete perceptron '{chosen_id}'.")
+                return
+
+        # Step 3: Re-evaluate ULLM (optimized)
+        summary_metrics = {
+            "perceptrons_total_before": len(perceptrons),
+            "perceptrons_selected_top": len(selected_ids),
+            "perceptron_deleted": bool(deleted_id)
+        }
+        self.ml_system.observe_perceptron_pruning(
+            selected_top_ids=selected_ids,
+            deleted_worst_id=deleted_id,
+            summary_metrics=summary_metrics,
+            optimized=True
+        )
+        ullm_text = self.ml_system.llm.re_evaluate_optimized(max_length=8000)
+        self.ullm_display.setPlainText(ullm_text)
+
+        QMessageBox.information(
+            self,
+            "Re-evaluation Complete",
+            "Perceptron selection + deletion recorded.\n"
+            "ULLM re-evaluated using the performance-optimized path."
+        )
     
     def _save_prolog_file(self):
         """Save the generated Prolog code to a file."""

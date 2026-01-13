@@ -141,6 +141,54 @@ class MLStrategySystem:
         
         self.llm.record_observation(obs)
         return obs
+
+    def observe_perceptron_pruning(
+        self,
+        selected_top_ids: List[str],
+        deleted_worst_id: Optional[str],
+        summary_metrics: Optional[Dict[str, Any]] = None,
+        optimized: bool = True
+    ) -> Observation:
+        """
+        Create an observation capturing a human-in-the-loop perceptron pruning step.
+
+        This is intended to support the flow:
+        - "Please select the top perceptrons"
+        - "Please delete the worst perceptron"
+        - Re-evaluate the ULLM (optionally via optimized path)
+        """
+        summary_metrics = summary_metrics or {}
+
+        attrs: Dict[str, Any] = {
+            "selected_top_perceptrons": selected_top_ids,
+            "deleted_worst_perceptron": deleted_worst_id,
+            "metrics": summary_metrics
+        }
+
+        # Confidence scores are a lightweight proxy for how decisive the selection was.
+        # Keep this simple and bounded for performance.
+        conf_scores: Dict[str, float] = {}
+        if selected_top_ids:
+            conf_scores["selection_strength"] = min(1.0, len(selected_top_ids) / 10.0)
+        if deleted_worst_id:
+            conf_scores["deletion_performed"] = 1.0
+
+        obs = Observation(
+            observation_id=str(uuid.uuid4()),
+            timestamp=datetime.now().isoformat(),
+            layer_id=999,  # Reserved pseudo-layer for human evaluation cycles
+            class_name="perceptron_pruning_cycle",
+            attributes=attrs,
+            confidence_scores=conf_scores,
+            context={"source": "human_evaluation"}
+        )
+
+        if optimized:
+            self.llm.record_observation_optimized(obs)
+        else:
+            self.llm.record_observation(obs)
+
+        return obs
     
     def generate_observation_report(self) -> str:
         """Generate a comprehensive report of all observations."""
