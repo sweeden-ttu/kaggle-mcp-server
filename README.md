@@ -4,7 +4,7 @@ A Model Context Protocol (MCP) server that provides comprehensive access to the 
 
 ## Features
 
-This MCP server provides 14 tools for interacting with Kaggle:
+This MCP server provides 15 tools for interacting with Kaggle:
 
 ### Competition Tools
 - **list_competitions** - Browse and search Kaggle competitions
@@ -25,6 +25,7 @@ This MCP server provides 14 tools for interacting with Kaggle:
 
 ### Utility
 - **diff_against_main** - Compare the current branch to the main branch before running evaluations
+- **parse_z3_proposed_model** - Turn a Z3 “Proposed Model” text block into nodes/edges plus Graphviz DOT for visualization
 
 ## Installation
 
@@ -339,6 +340,27 @@ Compare the current branch with a target branch (default: `main`) to see what ch
 - `max_output_chars` (integer, default: 8000) - Truncate output to this many characters to keep responses manageable
 
 **Returns:** Diff output or an informative message if nothing changed
+
+---
+
+### parse_z3_proposed_model
+
+Parse the `Proposed Model` section from a Z3 solver output and produce a graph-friendly representation.
+
+**Parameters:**
+- `model_output` (string, required) - Full Z3 solver output as text
+
+**Returns:** JSON with:
+- `nodes`: list of node names
+- `edges`: list of `{source, target, label}` derived from binary predicates
+- `dot`: Graphviz DOT string for quick visualization
+
+**Example:**
+```python
+parse_z3_proposed_model(model_output=z3_output_text)
+# render with graphviz:
+# echo "<dot_string>" | dot -Tpng > graph.png
+```
 
 ## Data Types Reference
 
