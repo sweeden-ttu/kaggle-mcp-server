@@ -4,7 +4,7 @@ A Model Context Protocol (MCP) server that provides comprehensive access to the 
 
 ## Features
 
-This MCP server provides 13 tools for interacting with Kaggle:
+This MCP server provides 15 tools for interacting with Kaggle:
 
 ### Competition Tools
 - **list_competitions** - Browse and search Kaggle competitions
@@ -22,6 +22,10 @@ This MCP server provides 13 tools for interacting with Kaggle:
 - **list_kernels** - Browse and search Kaggle kernels (notebooks/scripts)
 - **download_kernel** - Download kernel source code
 - **get_kernel_output** - Download kernel output files
+
+### Utility
+- **diff_against_main** - Compare the current branch to the main branch before running evaluations
+- **parse_z3_proposed_model** - Turn a Z3 “Proposed Model” text block into nodes/edges plus Graphviz DOT for visualization
 
 ## Installation
 
@@ -321,6 +325,42 @@ Download the output files from a Kaggle kernel.
 - `quiet` (boolean, default: true) - Suppress download progress output
 
 **Returns:** Success message with download location
+
+---
+
+### diff_against_main
+
+Compare the current branch with a target branch (default: `main`) to see what changed before running evaluations.
+
+**Parameters:**
+- `target_branch` (string, default: "main") - Branch to compare against
+- `paths` (list[string], optional) - Limit the diff to specific paths
+- `context_lines` (integer, default: 3) - Number of context lines in the diff (ignored if `stat_only` is true)
+- `stat_only` (boolean, default: false) - If true, return only a summary of file changes
+- `max_output_chars` (integer, default: 8000) - Truncate output to this many characters to keep responses manageable
+
+**Returns:** Diff output or an informative message if nothing changed
+
+---
+
+### parse_z3_proposed_model
+
+Parse the `Proposed Model` section from a Z3 solver output and produce a graph-friendly representation.
+
+**Parameters:**
+- `model_output` (string, required) - Full Z3 solver output as text
+
+**Returns:** JSON with:
+- `nodes`: list of node names
+- `edges`: list of `{source, target, label}` derived from binary predicates
+- `dot`: Graphviz DOT string for quick visualization
+
+**Example:**
+```python
+parse_z3_proposed_model(model_output=z3_output_text)
+# render with graphviz:
+# echo "<dot_string>" | dot -Tpng > graph.png
+```
 
 ## Data Types Reference
 

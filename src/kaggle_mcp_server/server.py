@@ -1,7 +1,10 @@
 """Kaggle MCP Server implementation."""
 
+import json
 import os
-from typing import Optional, List
+import re
+import subprocess
+from typing import Optional, List, Dict, Set, Any
 from mcp.server.fastmcp import FastMCP
 from kaggle.api.kaggle_api_extended import KaggleApi
 
@@ -420,6 +423,365 @@ def get_kernel_output(
         return f"Successfully downloaded kernel output to {path}"
     except Exception as e:
         return f"Error downloading kernel output: {str(e)}"
+
+
+def _extract_proposed_model_lines(raw_output: str) -> List[str]:
+    """
+    Pull out the lines that appear under the `Proposed Model` heading.
+    Falls back to the whole string if the heading is not present.
+    """
+    lines = raw_output.splitlines()
+    start_idx = None
+    for idx, line in enumerate(lines):
+        if "proposed model" in line.lower():
+            start_idx = idx + 1
+            break
+
+    if start_idx is None:
+        return lines
+
+    collected: List[str] = []
+    for line in lines[start_idx:]:
+        trimmed = line.strip()
+        if not trimmed:
+            # stop at the first empty line after the header
+            break
+        # stop if we hit another section header
+        if re.match(r"^[A-Za-z][A-Za-z0-9 _-]*:$", trimmed):
+            break
+        collected.append(line)
+    return collected
+
+
+def _build_graph_from_atoms(lines: List[str]) -> Dict[str, object]:
+    """
+    Parse predicate atoms into a simple directed graph representation.
+    Binary predicates become edges (src, dst, label=predicate).
+    Unary predicates create isolated labeled nodes.
+    """
+    atom_pattern = re.compile(r"([A-Za-z_][\w]*)\(([^()]*)\)")
+    nodes: Set[str] = set()
+    edges: List[Dict[str, str]] = []
+
+    for line in lines:
+        for match in atom_pattern.finditer(line):
+            predicate, arg_blob = match.groups()
+            args = [arg.strip() for arg in arg_blob.split(",") if arg.strip()]
+            if len(args) == 2:
+                src, dst = args
+                nodes.update([src, dst])
+                edges.append({"source": src, "target": dst, "label": predicate})
+            elif len(args) == 1:
+                nodes.add(args[0])
+
+    # Build a DOT graph for quick visualization
+    dot_lines = ["digraph ProposedModel {", "  rankdir=LR;"]
+    for node in sorted(nodes):
+        dot_lines.append(f'  "{node}";')
+    for edge in edges:
+        label = edge.get("label", "")
+        label_part = f' [label="{label}"]' if label else ""
+        dot_lines.append(f'  "{edge["source"]}" -> "{edge["target"]}"{label_part};')
+    dot_lines.append("}")
+
+    return {
+        "nodes": sorted(nodes),
+        "edges": edges,
+        "dot": "\n".join(dot_lines)
+    }
+
+
+@mcp.tool()
+def parse_z3_proposed_model(model_output: str) -> str:
+    """
+    Parse a Z3 textual model output and return a graph-friendly view of the
+    `Proposed Model` section. The result includes nodes, labeled edges, and a
+    Graphviz DOT string to visualize the relationships.
+
+    Args:
+        model_output: Full Z3 solver output as text.
+
+    Returns:
+        JSON string with keys:
+            - nodes: list of node names
+            - edges: list of {source, target, label}
+            - dot: Graphviz DOT description for quick rendering
+    """
+    lines = _extract_proposed_model_lines(model_output)
+    graph = _build_graph_from_atoms(lines)
+    return json.dumps(graph)
+
+
+def _git_diff_output(branch_range: str, paths: Optional[List[str]], context_lines: int, stat_only: bool) -> str:
+    """Run git diff with optional paths."""
+    cmd = ["git", "diff", branch_range]
+    if stat_only:
+        cmd.append("--stat")
+    else:
+        cmd.extend(["--unified", str(max(0, context_lines))])
+    if paths:
+        cmd.extend(paths)
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode not in (0, 1):
+        return f"Error computing diff: {result.stderr.strip() or result.stdout.strip()}"
+    return result.stdout.strip()
+
+
+@mcp.tool()
+def diff_against_main(
+    target_branch: str = "main",
+    paths: Optional[List[str]] = None,
+    context_lines: int = 3,
+    stat_only: bool = False,
+    max_output_chars: int = 8000
+) -> str:
+    """
+    Compare current branch changes against the target branch before evaluation.
+
+    Args:
+        target_branch: Branch to compare against (default: "main").
+        paths: Optional list of paths to limit the diff.
+        context_lines: Number of context lines to include when not using stat_only.
+        stat_only: Return only a summary (files/insertions/deletions).
+        max_output_chars: Truncate output to this many characters to avoid overload.
+
+    Returns:
+        Diff output or error message.
+    """
+    try:
+        branch_range = f"{target_branch}...HEAD"
+        output = _git_diff_output(branch_range, paths, context_lines, stat_only)
+        if not output:
+            return "No differences found between branches."
+        if len(output) > max_output_chars:
+            return f"{output[:max_output_chars]}\n\n[output truncated at {max_output_chars} characters]"
+        return output
+    except FileNotFoundError:
+        return "git is not available on this system."
+    except Exception as e:
+        return f"Unexpected error running diff: {str(e)}"
+
+
+# Import reverse simulation system
+try:
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from fol_workbench.reverse_simulation_system import ReverseSimulationSystem
+    from fol_workbench.test_first_simulator import TestCase, TestStatus
+    REVERSE_SIMULATION_AVAILABLE = True
+except ImportError:
+    REVERSE_SIMULATION_AVAILABLE = False
+    ReverseSimulationSystem = None
+
+# Global reverse simulation system instance
+_reverse_sim_system = None
+
+def _get_reverse_sim_system():
+    """Get or create reverse simulation system instance."""
+    global _reverse_sim_system
+    if _reverse_sim_system is None and REVERSE_SIMULATION_AVAILABLE:
+        _reverse_sim_system = ReverseSimulationSystem()
+    return _reverse_sim_system
+
+
+@mcp.tool()
+def create_test_first_model(
+    name: str,
+    formula: str,
+    variables: Dict[str, str],
+    test_cases: List[Dict[str, Any]]
+) -> str:
+    """
+    Create a test-first unit model with test cases.
+    
+    Args:
+        name: Model name
+        formula: FOL formula (e.g., "And(x, y)")
+        variables: Dict mapping variable names to types (e.g., {"x": "Bool", "y": "Bool"})
+        test_cases: List of test case dicts with "name", "input", "expected_output", "constraints"
+    
+    Returns:
+        Success message with model details
+    """
+    if not REVERSE_SIMULATION_AVAILABLE:
+        return "Reverse simulation system not available. Install required dependencies."
+    
+    try:
+        system = _get_reverse_sim_system()
+        model = system.create_model_with_tests(name, formula, variables, test_cases)
+        
+        return json.dumps({
+            "status": "success",
+            "model_name": model.name,
+            "test_cases": len(model.test_cases),
+            "message": f"Created model '{name}' with {len(model.test_cases)} test cases"
+        }, indent=2)
+    except Exception as e:
+        return f"Error creating model: {str(e)}"
+
+
+@mcp.tool()
+def analyze_model_design(model_name: str) -> str:
+    """
+    Analyze a model's design and get intelligent feedback.
+    
+    Args:
+        model_name: Name of the model to analyze
+    
+    Returns:
+        JSON with feedback, topics, and proposals
+    """
+    if not REVERSE_SIMULATION_AVAILABLE:
+        return "Reverse simulation system not available."
+    
+    try:
+        system = _get_reverse_sim_system()
+        result = system.analyze_and_get_feedback(model_name)
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return f"Error analyzing model: {str(e)}"
+
+
+@mcp.tool()
+def test_hypothesis(
+    hypothesis_description: str,
+    model_name: str,
+    user_response: Optional[str] = None
+) -> str:
+    """
+    Test a hypothesis with the "getting warmer" feedback loop.
+    
+    Args:
+        hypothesis_description: Description of the hypothesis to test
+        model_name: Name of the model to test against
+        user_response: Optional user response ("yes"/"no") - if not provided, will prompt
+    
+    Returns:
+        JSON with hypothesis test results
+    """
+    if not REVERSE_SIMULATION_AVAILABLE:
+        return "Reverse simulation system not available."
+    
+    try:
+        system = _get_reverse_sim_system()
+        
+        # Create callback if user response provided
+        callback = None
+        if user_response:
+            def fixed_callback(msg):
+                return user_response
+            callback = fixed_callback
+        
+        result = system.test_hypothesis_with_feedback(
+            hypothesis_description,
+            model_name,
+            callback
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return f"Error testing hypothesis: {str(e)}"
+
+
+@mcp.tool()
+def generate_reverse_simulation_notebook(
+    model_name: str,
+    observed_outputs: List[Dict[str, Any]],
+    output_path: str = "reverse_simulation.ipynb"
+) -> str:
+    """
+    Generate a Kaggle notebook that simulates outputs and guesses inputs.
+    
+    Args:
+        model_name: Name of the model to reverse engineer
+        observed_outputs: List of observed output patterns (dicts with variable: value)
+        output_path: Path to save the notebook
+    
+    Returns:
+        Success message with notebook path
+    """
+    if not REVERSE_SIMULATION_AVAILABLE:
+        return "Reverse simulation system not available."
+    
+    try:
+        system = _get_reverse_sim_system()
+        path = system.generate_reverse_simulation_notebook(
+            model_name,
+            observed_outputs,
+            Path(output_path)
+        )
+        return f"Successfully generated notebook at {path}"
+    except Exception as e:
+        return f"Error generating notebook: {str(e)}"
+
+
+@mcp.tool()
+def propose_next_steps(model_name: str) -> str:
+    """
+    Propose next steps for model development based on current state.
+    
+    Args:
+        model_name: Name of the model
+    
+    Returns:
+        JSON with prioritized next steps
+    """
+    if not REVERSE_SIMULATION_AVAILABLE:
+        return "Reverse simulation system not available."
+    
+    try:
+        system = _get_reverse_sim_system()
+        steps = system.propose_next_steps(model_name)
+        return json.dumps(steps, indent=2)
+    except Exception as e:
+        return f"Error proposing next steps: {str(e)}"
+
+
+@mcp.tool()
+def run_hypothesis_loop(
+    hypothesis_description: str,
+    model_name: str,
+    max_steps: int = 10,
+    user_responses: Optional[List[str]] = None
+) -> str:
+    """
+    Run the complete hypothesis testing loop with backtracking.
+    
+    Args:
+        hypothesis_description: Initial hypothesis description
+        model_name: Name of the model
+        max_steps: Maximum number of steps
+        user_responses: Optional list of user responses for each step
+    
+    Returns:
+        JSON with final hypothesis and steps
+    """
+    if not REVERSE_SIMULATION_AVAILABLE:
+        return "Reverse simulation system not available."
+    
+    try:
+        system = _get_reverse_sim_system()
+        
+        # Create callback with responses
+        response_iter = iter(user_responses) if user_responses else None
+        
+        def callback(msg):
+            if response_iter:
+                try:
+                    return next(response_iter)
+                except StopIteration:
+                    return "no"  # Default to no if responses exhausted
+            return "yes"  # Default to yes for auto-mode
+        
+        result = system.run_hypothesis_loop(
+            hypothesis_description,
+            model_name,
+            max_steps,
+            callback
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return f"Error running hypothesis loop: {str(e)}"
 
 
 def main():
