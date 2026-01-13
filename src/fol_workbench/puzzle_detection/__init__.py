@@ -6,12 +6,47 @@ detects handwritten text/images/questions, and uses perceptron units with Bayesi
 to learn puzzle detection and perceptron assignment.
 """
 
-# Import modules - handle optional dependencies gracefully
-from .screenshot_capture import ScreenshotCapture
-from .grid_segmentation import GridSegmentation
-from .feature_extractor import FeatureExtractor
-from .perceptron_units import PerceptronUnit
-from .hyperparameter_tuner import HyperparameterTuner
+# Import modules - handle optional dependencies gracefully.
+#
+# NOTE: Some modules depend on optional native/system packages (e.g., Pillow/PIL,
+# OpenCV, Tesseract, SciPy). We keep imports lazy/guarded so non-UI / non-image
+# parts of the codebase (e.g., logic pipelines) can still be imported in minimal
+# environments.
+
+try:
+    from .screenshot_capture import ScreenshotCapture
+except ImportError as e:
+    class ScreenshotCapture:  # type: ignore
+        def __init__(self, *args, **kwargs):
+            raise ImportError(f"ScreenshotCapture could not be imported: {e}")
+
+try:
+    from .grid_segmentation import GridSegmentation
+except ImportError as e:
+    class GridSegmentation:  # type: ignore
+        def __init__(self, *args, **kwargs):
+            raise ImportError(f"GridSegmentation could not be imported: {e}")
+
+try:
+    from .feature_extractor import FeatureExtractor
+except ImportError as e:
+    class FeatureExtractor:  # type: ignore
+        def __init__(self, *args, **kwargs):
+            raise ImportError(f"FeatureExtractor could not be imported: {e}")
+
+try:
+    from .perceptron_units import PerceptronUnit
+except ImportError as e:
+    class PerceptronUnit:  # type: ignore
+        def __init__(self, *args, **kwargs):
+            raise ImportError(f"PerceptronUnit could not be imported: {e}")
+
+try:
+    from .hyperparameter_tuner import HyperparameterTuner
+except ImportError as e:
+    class HyperparameterTuner:  # type: ignore
+        def __init__(self, *args, **kwargs):
+            raise ImportError(f"HyperparameterTuner could not be imported: {e}")
 
 try:
     from .confidence_evaluator import ConfidenceEvaluator

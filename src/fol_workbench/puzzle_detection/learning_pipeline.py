@@ -5,16 +5,48 @@ Orchestrates the complete learning cycle:
 assign → iterate → evaluate → test → propose → infer → learn → save → optimize → eliminate → learn → plan → evaluate → experiment → design → performance improve
 """
 
+from __future__ import annotations
+
 from typing import Dict, List, Optional, Any, Tuple, Union
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-import numpy as np
+try:
+    import numpy as np  # type: ignore
+except ImportError:  # pragma: no cover
+    # Keep the module importable in minimal environments (e.g., logic-only usage).
+    np = None  # type: ignore
 
-from .hyperparameter_tuner import HyperparameterTuner, HyperparameterConfig, EpisodeResult
-from .confidence_evaluator import ConfidenceEvaluator, ImprovementEvidence
-from .perceptron_units import PerceptronUnit
-from .bayesian_perceptron_assigner import BayesianPerceptronAssigner
-from .feature_extractor import GridSquareFeatures
+try:
+    from .hyperparameter_tuner import HyperparameterTuner, HyperparameterConfig, EpisodeResult
+except ImportError:  # pragma: no cover
+    HyperparameterTuner = None  # type: ignore
+    HyperparameterConfig = Any  # type: ignore
+    EpisodeResult = Any  # type: ignore
+
+try:
+    from .confidence_evaluator import ConfidenceEvaluator, ImprovementEvidence
+except ImportError:  # pragma: no cover
+    ConfidenceEvaluator = None  # type: ignore
+    ImprovementEvidence = Any  # type: ignore
+try:
+    from .perceptron_units import PerceptronUnit
+    from .bayesian_perceptron_assigner import BayesianPerceptronAssigner
+    from .feature_extractor import GridSquareFeatures
+except ImportError:  # pragma: no cover
+    # These are required for the puzzle-detection learning pipeline, but not for
+    # the FOL proof pipeline entrypoint.
+    PerceptronUnit = Any  # type: ignore
+    BayesianPerceptronAssigner = None  # type: ignore
+    GridSquareFeatures = Any  # type: ignore
+
+try:
+    from ..prolog_brain import PrologBrain, PrologPerceptronAdapter
+    PROLOG_BRAIN_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    PrologBrain = None  # type: ignore
+    PrologPerceptronAdapter = None  # type: ignore
+    PROLOG_BRAIN_AVAILABLE = False
+
 from ..database import Database, Perceptron
 from ..logic_layer import LogicEngine, Z3_AVAILABLE
 
@@ -44,7 +76,9 @@ class LearningPipeline:
         database: Optional[Database] = None,
         hyperparameter_tuner: Optional[HyperparameterTuner] = None,
         confidence_evaluator: Optional[ConfidenceEvaluator] = None,
-        bayesian_assigner: Optional[BayesianPerceptronAssigner] = None
+        bayesian_assigner: Optional[BayesianPerceptronAssigner] = None,
+        prolog_brain: Optional[PrologBrain] = None,
+        enable_prolog_integration: bool = True
     ):
         """
         Initialize learning pipeline.
@@ -54,14 +88,52 @@ class LearningPipeline:
             hyperparameter_tuner: Hyperparameter tuner instance
             confidence_evaluator: Confidence evaluator instance
             bayesian_assigner: Bayesian perceptron assigner instance
+            prolog_brain: PROLOG brain instance (optional)
+            enable_prolog_integration: Whether to enable PROLOG brain integration
         """
         self.database = database or Database()
-        self.hyperparameter_tuner = hyperparameter_tuner or HyperparameterTuner()
-        self.confidence_evaluator = confidence_evaluator or ConfidenceEvaluator()
-        self.bayesian_assigner = bayesian_assigner or BayesianPerceptronAssigner()
+
+        if hyperparameter_tuner is not None:
+            self.hyperparameter_tuner = hyperparameter_tuner
+        else:
+            if HyperparameterTuner is None:
+                self.hyperparameter_tuner = None
+            else:
+                self.hyperparameter_tuner = HyperparameterTuner()
+
+        if confidence_evaluator is not None:
+            self.confidence_evaluator = confidence_evaluator
+        else:
+            if ConfidenceEvaluator is None:
+                self.confidence_evaluator = None
+            else:
+                self.confidence_evaluator = ConfidenceEvaluator()
+
+        if bayesian_assigner is not None:
+            self.bayesian_assigner = bayesian_assigner
+        else:
+            if BayesianPerceptronAssigner is None:
+                self.bayesian_assigner = None
+            else:
+                self.bayesian_assigner = BayesianPerceptronAssigner()
+        
+        # Initialize PROLOG brain if available and enabled
+        self.prolog_brain = None
+        self.enable_prolog_integration = enable_prolog_integration and PROLOG_BRAIN_AVAILABLE
+        if self.enable_prolog_integration:
+            self.prolog_brain = prolog_brain or PrologBrain()
+            self.prolog_adapter = PrologPerceptronAdapter()
         
         self.state = PipelineState()
         self.running = False
+
+    def _mean(self, values: List[float]) -> float:
+        """Mean helper that works even when numpy isn't installed."""
+        if not values:
+            return 0.0
+        if np is not None:
+            return float(np.mean(values))  # type: ignore[union-attr]
+        return float(sum(values) / len(values))
     
     def run_episode(
         self,
@@ -79,6 +151,12 @@ class LearningPipeline:
         Returns:
             Dictionary with episode results
         """
+        if self.hyperparameter_tuner is None or self.confidence_evaluator is None:
+            raise ImportError(
+                "Puzzle-detection learning pipeline requires numpy/scipy dependencies. "
+                "Install requirements to use run_episode(), or use run_fol_pipeline() for logic-only."
+            )
+
         # Allow callers (e.g., PuzzleDetector) to provide the current in-memory perceptrons.
         if perceptrons is not None:
             self.state.perceptrons = dict(perceptrons)
@@ -687,9 +765,38 @@ class LearningPipeline:
     def _render_pipeline(self, res: "LearningPipeline.FOLPipelineResult", render_format: str) -> Dict[str, str]:
         """
         Render an outermost visualization of the pipeline artifacts.
-        Supported: markdown | latex | raw_html (best-effort).
+        Supported: markdown | mermaid | mathjax | latex | raw_html (best-effort).
         """
         fmt = (render_format or "markdown").lower()
+
+        if fmt == "mermaid":
+            status = res.resolution.get("status", "unknown")
+            empty = res.resolution.get("empty_clause_derived", False)
+            horn = res.horn_sld.get("is_horn", False)
+            u_sz = len(res.herbrand.get("herbrand_universe") or [])
+            b_sz = len(res.herbrand.get("herbrand_base") or [])
+            diagram = "\n".join([
+                "flowchart TD",
+                "  A[Eliminate →/↔, push ¬ inward<br/>NNF] --> B[Prenex: quantifiers left<br/>PNF]",
+                "  B --> C[Skolemize ∃<br/>SNF]",
+                "  C --> D[CNF (Tseitin)]",
+                f"  D --> E[Resolution/Unification<br/>{status}<br/>empty_clause={empty}]",
+                f"  D --> F[Horn/SLD<br/>is_horn={horn}]",
+                f"  D --> G[Herbrand<br/>|U|={u_sz}, |B|={b_sz}]",
+            ])
+            return {"mermaid": diagram}
+
+        if fmt == "mathjax":
+            # Minimal MathJax-friendly wrapper; content is still SMT2 strings.
+            return {
+                "mathjax": "\n".join([
+                    r"\[\textbf{FOL Pipeline Output}\]",
+                    r"\[\textbf{NNF (SMT2)}:\ \texttt{" + (res.nnf_smt2 or "") + r"}\]",
+                    r"\[\textbf{PNF (SMT2)}:\ \texttt{" + (res.pnf_smt2 or "") + r"}\]",
+                    r"\[\textbf{SNF (SMT2)}:\ \texttt{" + (res.skolem_snf_smt2 or "") + r"}\]",
+                    r"\[\textbf{CNF (SMT2)}:\ \texttt{" + (res.cnf_smt2 or "") + r"}\]",
+                ])
+            }
 
         if fmt == "latex":
             return {
@@ -825,8 +932,8 @@ class LearningPipeline:
         accuracies = [p.accuracy for p in self.state.perceptrons.values()]
         confidences = [p.confidence for p in self.state.perceptrons.values()]
         
-        avg_accuracy = np.mean(accuracies) if accuracies else 0.0
-        avg_confidence = np.mean(confidences) if confidences else 0.0
+        avg_accuracy = self._mean([float(x) for x in accuracies]) if accuracies else 0.0
+        avg_confidence = self._mean([float(x) for x in confidences]) if confidences else 0.0
         
         # Record in confidence evaluator
         self.confidence_evaluator.record_performance(avg_accuracy, avg_confidence)
