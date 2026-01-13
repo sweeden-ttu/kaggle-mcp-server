@@ -18,7 +18,7 @@ Architecture:
 - LogicEngine: Main engine class that orchestrates Z3 operations
 """
 
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any, Set
 import ast
 from dataclasses import dataclass
 from enum import Enum
@@ -28,7 +28,10 @@ try:
         Solver, Bool, Int, Real, String, Function, ForAll, Exists, And, Or, Not,
         Implies, sat, unsat, unknown, Model, is_true, is_false,
         IntSort, BoolSort, RealSort, StringSort, ArraySort,
-        BoolVal, IntVal, RealVal, StringVal, parse_smt2_string
+        BoolVal, IntVal, RealVal, StringVal, parse_smt2_string,
+        Goal, Tactic, Then,
+        is_quantifier, is_and, is_or, is_not, is_implies, is_eq,
+        substitute_vars, substitute, Const
     )
     # Iff (biconditional) is implemented as equality in Z3: (x == y) for Bool
     # We'll create a helper function for it
@@ -869,6 +872,327 @@ class LogicEngine:
             SMT-LIB string
         """
         return self.solver.to_smt2()
+
+    # ---------------------------------------------------------------------
+    # Prenex Normal Form (PNF) + Skolemization utilities
+    # ---------------------------------------------------------------------
+
+    def pnf_and_skolemize(self, formula_str: str, timeout_ms: int = 2000) -> Dict[str, Any]:
+        """
+        Compute a Prenex Normal Form (PNF) equivalent of the input formula, and a
+        Skolemized (SNF) form that is equisatisfiable with the input.
+
+        Notes:
+        - **PNF is logically equivalent** to the original formula (α-renaming as needed).
+        - **Skolemization is NOT logically equivalent in general**, but is **equisatisfiable**
+          (satisfiable iff original is satisfiable) for first-order logic.
+
+        Args:
+            formula_str: Formula in Python/Z3 syntax or SMT-LIB (see parse_formula()).
+            timeout_ms: Z3 timeout used for optional equivalence checking.
+
+        Returns:
+            Dict containing:
+              - original: pretty string
+              - original_smt2: s-expression
+              - pnf_smt2: s-expression in PNF (equivalent)
+              - skolem_snf_smt2: s-expression in Skolem normal form (equisatisfiable)
+              - equivalence_check: 'unsat'|'sat'|'unknown'|'error' for Not(original ↔ pnf)
+        """
+        expr = self.parse_formula(formula_str)
+        if expr is None:
+            return {
+                "error": f"Failed to parse formula: {formula_str}",
+            }
+
+        # Build an *equivalent* NNF ourselves.
+        #
+        # Important: Z3's `nnf` tactic performs Skolemization in some cases (not equivalent),
+        # which breaks the promise "PNF is logically equivalent". So we only use `simplify`
+        # and do the NNF transformation here.
+        simplified = self._apply_tactics_to_single_expr(expr, ["simplify"])
+        simplified = self._normalize_quantifiers(simplified)
+        nnf_expr = self._to_nnf_equiv(simplified)
+
+        pnf_expr = self._to_pnf(nnf_expr)
+
+        # Skolemize using Z3's SNF tactic. This gives Skolem normal form.
+        snf_expr = self._apply_tactics_to_single_expr(expr, ["simplify", "nnf", "snf"])
+
+        equivalence_check = self._check_equivalence(expr, pnf_expr, timeout_ms=timeout_ms)
+
+        return {
+            "original": str(expr),
+            "original_smt2": expr.sexpr(),
+            "pnf_smt2": pnf_expr.sexpr(),
+            "skolem_snf_smt2": snf_expr.sexpr(),
+            "equivalence_check": equivalence_check,
+        }
+
+    def _apply_tactics_to_single_expr(self, expr: Any, tactic_names: List[str]) -> Any:
+        """Apply a sequence of Z3 tactics to an expression and return a single combined expression."""
+        g = Goal()
+        g.add(expr)
+        if len(tactic_names) == 1:
+            t = Tactic(tactic_names[0])
+        else:
+            t = Then(*[Tactic(name) for name in tactic_names])
+        result = t(g)
+        if len(result) == 0:
+            return BoolVal(True)
+        sg = result[0]
+        if len(sg) == 0:
+            return BoolVal(True)
+        if len(sg) == 1:
+            return sg[0]
+        return And(*list(sg))
+
+    def _to_nnf_equiv(self, expr: Any) -> Any:
+        """
+        Convert an expression to Negation Normal Form (NNF) **preserving logical equivalence**
+        (no Skolemization). Assumes quantifiers have explicit Consts (via _normalize_quantifiers()).
+        """
+        return self._to_nnf_equiv_rec(expr, negated=False)
+
+    def _to_nnf_equiv_rec(self, expr: Any, negated: bool) -> Any:
+        """NNF conversion with a polarity flag to avoid unnecessary `Not(...)` nesting."""
+        # Push negation down
+        if is_not(expr):
+            return self._to_nnf_equiv_rec(expr.arg(0), not negated)
+
+        # Implication elimination: (a -> b) == (¬a ∨ b)
+        if is_implies(expr):
+            a, b = expr.arg(0), expr.arg(1)
+            return self._to_nnf_equiv_rec(Or(Not(a), b), negated)
+
+        # Biconditional elimination for Bool: (a <-> b) == (a & b) ∨ (¬a & ¬b)
+        if is_eq(expr) and expr.sort() == BoolSort():
+            a, b = expr.arg(0), expr.arg(1)
+            return self._to_nnf_equiv_rec(Or(And(a, b), And(Not(a), Not(b))), negated)
+
+        # Quantifiers: swap under negation.
+        if is_quantifier(expr):
+            vars_open, body_open, is_forall_q = self._open_quantifier(expr)
+            body_open = self._normalize_quantifiers(body_open)
+            if negated:
+                # ¬∀x A == ∃x ¬A ; ¬∃x A == ∀x ¬A
+                flipped_is_forall = not is_forall_q
+                new_body = self._to_nnf_equiv_rec(body_open, True)
+                return ForAll(vars_open, new_body) if flipped_is_forall else Exists(vars_open, new_body)
+            new_body = self._to_nnf_equiv_rec(body_open, False)
+            return ForAll(vars_open, new_body) if is_forall_q else Exists(vars_open, new_body)
+
+        # And/Or: distribute negation using De Morgan.
+        if is_and(expr) or is_or(expr):
+            op_is_and = is_and(expr)
+            args = [expr.arg(i) for i in range(expr.num_args())]
+            if not negated:
+                new_args = [self._to_nnf_equiv_rec(a, False) for a in args]
+                return And(*new_args) if op_is_and else Or(*new_args)
+            # ¬(A ∧ B) == ¬A ∨ ¬B ; ¬(A ∨ B) == ¬A ∧ ¬B
+            new_args = [self._to_nnf_equiv_rec(a, True) for a in args]
+            return Or(*new_args) if op_is_and else And(*new_args)
+
+        # Atom
+        return Not(expr) if negated else expr
+
+    def _check_equivalence(self, a: Any, b: Any, timeout_ms: int = 2000) -> str:
+        """
+        Try to check validity of (a ↔ b) by checking satisfiability of ¬(a ↔ b).
+        Returns one of: 'unsat', 'sat', 'unknown', 'error'.
+        """
+        try:
+            s = Solver()
+            if timeout_ms is not None:
+                s.set(timeout=int(timeout_ms))
+            s.add(Not(Iff(a, b)))
+            r = s.check()
+            if r == sat:
+                return "sat"       # counterexample exists => not equivalent
+            if r == unsat:
+                return "unsat"     # equivalent
+            return "unknown"
+        except Exception:
+            return "error"
+
+    def _normalize_quantifiers(self, expr: Any) -> Any:
+        """
+        Convert quantifier bodies from de-Bruijn bound vars into explicit Consts,
+        recursively. This makes structural transformations (like prenexing) much easier.
+        """
+        if is_quantifier(expr):
+            vars_open, body_open, is_forall = self._open_quantifier(expr)
+            body_norm = self._normalize_quantifiers(body_open)
+            return ForAll(vars_open, body_norm) if is_forall else Exists(vars_open, body_norm)
+
+        if hasattr(expr, "num_args") and expr.num_args() > 0:
+            # Rebuild applications with normalized children.
+            children = [self._normalize_quantifiers(expr.arg(i)) for i in range(expr.num_args())]
+            decl = expr.decl()
+            return decl(*children)
+
+        return expr
+
+    def _open_quantifier(self, q: Any) -> Tuple[List[Any], Any, bool]:
+        """
+        Open a Z3 quantifier into explicit bound Consts and a body where de-Bruijn
+        vars have been substituted with those Consts.
+        """
+        n = q.num_vars()
+        vars_open = [Const(q.var_name(i), q.var_sort(i)) for i in range(n)]
+        body_open = substitute_vars(q.body(), *vars_open)
+        is_forall_q = bool(q.is_forall())
+        return vars_open, body_open, is_forall_q
+
+    def _collect_free_names(self, expr: Any, bound: Optional[Set[str]] = None) -> Set[str]:
+        """
+        Collect free variable names from an expression that uses explicit Consts
+        for bound variables (i.e., after _normalize_quantifiers()).
+        """
+        if bound is None:
+            bound = set()
+
+        if is_quantifier(expr):
+            vars_open, body_open, _ = self._open_quantifier(expr)
+            new_bound = set(bound)
+            for v in vars_open:
+                new_bound.add(v.decl().name())
+            return self._collect_free_names(body_open, bound=new_bound)
+
+        # A Const has zero args and a 0-arity declaration.
+        if hasattr(expr, "num_args") and expr.num_args() == 0 and hasattr(expr, "decl"):
+            name = expr.decl().name()
+            if name not in bound:
+                return {name}
+            return set()
+
+        names: Set[str] = set()
+        if hasattr(expr, "num_args"):
+            for i in range(expr.num_args()):
+                names |= self._collect_free_names(expr.arg(i), bound=bound)
+        return names
+
+    def _fresh_name(self, base: str, used: Set[str]) -> str:
+        """Generate a fresh variable name not in used."""
+        if base not in used:
+            used.add(base)
+            return base
+        idx = 0
+        while True:
+            candidate = f"{base}__{idx}"
+            if candidate not in used:
+                used.add(candidate)
+                return candidate
+            idx += 1
+
+    def _alpha_rename_var(self, matrix: Any, old_var: Any, new_var: Any) -> Any:
+        """Alpha-rename occurrences of old_var to new_var in a matrix expression."""
+        try:
+            return substitute(matrix, (old_var, new_var))
+        except Exception:
+            # Very defensive fallback; in practice substitute() should work.
+            return matrix
+
+    def _to_pnf(self, expr: Any) -> Any:
+        """
+        Convert an NNF expression into Prenex Normal Form (PNF), preserving equivalence
+        by α-renaming bound variables to avoid capture.
+        """
+        prefix, matrix = self._extract_prenex(expr)
+        # Rebuild nested quantifiers around the quantifier-free matrix.
+        out = matrix
+        for quant, vars_open in reversed(prefix):
+            out = ForAll(vars_open, out) if quant == "forall" else Exists(vars_open, out)
+        return out
+
+    def _extract_prenex(self, expr: Any) -> Tuple[List[Tuple[str, List[Any]]], Any]:
+        """
+        Return (prefix, matrix) where prefix is a list of ('forall'|'exists', vars)
+        and matrix contains no quantifiers.
+
+        Assumes expr has explicit Consts for bound vars (via _normalize_quantifiers()).
+        """
+        # Quantifier case
+        if is_quantifier(expr):
+            vars_open, body_open, is_forall_q = self._open_quantifier(expr)
+            sub_prefix, sub_matrix = self._extract_prenex(self._normalize_quantifiers(body_open))
+            quant = "forall" if is_forall_q else "exists"
+            return [(quant, vars_open)] + sub_prefix, sub_matrix
+
+        # Boolean connectives: pull quantifiers from children
+        if is_and(expr) or is_or(expr):
+            op_is_and = is_and(expr)
+            args = [expr.arg(i) for i in range(expr.num_args())]
+            # Fold left-to-right so we preserve a stable quantifier order.
+            p_acc: List[Tuple[str, List[Any]]] = []
+            m_acc: Any = None
+            for a in args:
+                p, m = self._extract_prenex(a)
+                if m_acc is None:
+                    p_acc, m_acc = p, m
+                    continue
+
+                p1, m1 = p_acc, m_acc
+                p2, m2 = p, m
+
+            used = set()
+            used |= self._collect_free_names(m1)
+            used |= self._collect_free_names(m2)
+            # Also reserve already-bound names from both prefixes
+            for _, vs in p1 + p2:
+                for v in vs:
+                    used.add(v.decl().name())
+
+            # Rename bound variables in p1/p2 to avoid collisions/capture when concatenating.
+            p1_renamed: List[Tuple[str, List[Any]]] = []
+            for quant, vs in p1:
+                new_vs: List[Any] = []
+                for v in vs:
+                    fresh = self._fresh_name(v.decl().name(), used)
+                    if fresh != v.decl().name():
+                        v_new = Const(fresh, v.sort())
+                        m1 = self._alpha_rename_var(m1, v, v_new)
+                        new_vs.append(v_new)
+                    else:
+                        new_vs.append(v)
+                p1_renamed.append((quant, new_vs))
+
+            p2_renamed: List[Tuple[str, List[Any]]] = []
+            for quant, vs in p2:
+                new_vs = []
+                for v in vs:
+                    fresh = self._fresh_name(v.decl().name(), used)
+                    if fresh != v.decl().name():
+                        v_new = Const(fresh, v.sort())
+                        m2 = self._alpha_rename_var(m2, v, v_new)
+                        new_vs.append(v_new)
+                    else:
+                        new_vs.append(v)
+                p2_renamed.append((quant, new_vs))
+
+                matrix = And(m1, m2) if op_is_and else Or(m1, m2)
+                p_acc = p1_renamed + p2_renamed
+                m_acc = matrix
+
+            return p_acc, m_acc
+
+        # Other nodes: treat as quantifier-free matrix
+        if is_implies(expr) or (is_eq(expr) and expr.sort() == BoolSort()):
+            # Shouldn't occur if caller used NNF, but keep it robust (equivalence-preserving).
+            nnf_expr = self._to_nnf_equiv(self._normalize_quantifiers(expr))
+            return self._extract_prenex(nnf_expr)
+
+        # Generic recursion: if there are args, normalize them; but don't introduce new quantifiers.
+        if hasattr(expr, "num_args") and expr.num_args() > 0:
+            children = [expr.arg(i) for i in range(expr.num_args())]
+            # If any child contains a quantifier, we conservatively NNF again and retry.
+            if any(is_quantifier(c) for c in children):
+                nnf_expr = self._apply_tactics_to_single_expr(expr, ["simplify", "nnf"])
+                nnf_expr = self._normalize_quantifiers(nnf_expr)
+                return self._extract_prenex(nnf_expr)
+            return [], expr
+
+        return [], expr
     
     def from_smt_lib(self, smt_content: str) -> Tuple[bool, Optional[str]]:
         """

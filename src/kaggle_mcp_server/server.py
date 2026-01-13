@@ -855,6 +855,59 @@ def extract_vocabulary_metadata() -> str:
 
 
 @mcp.tool()
+def pnf_and_skolemize(formula: str, timeout_ms: int = 2000) -> str:
+    """
+    Perform prenexing (PNF) and Skolemization (SNF) on a first-order logic formula.
+
+    Returns:
+      - PNF: logically equivalent transformation (α-renaming only)
+      - SNF: Skolem normal form (equisatisfiable, not generally equivalent)
+
+    Args:
+        formula: Formula in Python/Z3 syntax (e.g., "ForAll(x, Exists(y, Iff(x, y)))")
+                 or SMT-LIB if the string starts with '('.
+        timeout_ms: Timeout for the optional equivalence check.
+
+    Returns:
+        JSON string with original, pnf_smt2, skolem_snf_smt2, equivalence_check, and a
+        short evidence/performance-oriented "scientific philosophy" note.
+    """
+    try:
+        from fol_workbench.logic_layer import LogicEngine
+
+        engine = LogicEngine()
+        result = engine.pnf_and_skolemize(formula, timeout_ms=timeout_ms)
+
+        philosophy = {
+            "scientific_philosophy": (
+                "Treat each logical formula as a falsifiable hypothesis. Use solver-produced countermodels "
+                "as empirical refutations and solver statistics (timeouts/unknowns, decisions, conflicts) as "
+                "performance evidence to guide theory choice. Prefer theories that are (a) predictive "
+                "(satisfiable/unsatisfiable results are stable under re-checks), (b) parsimonious "
+                "(low quantifier depth / minimal Skolem growth), and (c) modular (test-first constraints)."
+            ),
+            "theory_note": (
+                "PNF preserves logical equivalence; Skolemization preserves satisfiability (equisatisfiable). "
+                "In practice, Skolem growth is a measurable complexity cost, so track it as a performance signal."
+            ),
+        }
+
+        if isinstance(result, dict) and "error" in result:
+            return json.dumps({"status": "error", "error": result["error"]})
+
+        return json.dumps(
+            {
+                "status": "success",
+                **result,
+                **philosophy,
+            },
+            indent=2,
+        )
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+@mcp.tool()
 def call_reverse_simulation_with_herbrand(
     model_name: str,
     preferred_implications: Optional[List[str]] = None

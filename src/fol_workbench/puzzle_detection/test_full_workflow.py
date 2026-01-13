@@ -97,11 +97,9 @@ def test_full_workflow():
             detector.perceptrons
         )
         print(f"   ✓ Assigned perceptron: {assignment.perceptron_id}")
-        conf = assignment.assignment_confidence
-        if isinstance(conf, (int, float)):
-            print(f"   ✓ Assignment confidence: {conf:.3f}")
-        else:
-            print(f"   ✓ Assignment confidence: {conf}")
+        print(f"   ✓ Assignment confidence: {float(assignment.assignment_confidence):.3f}")
+        if assignment.metadata:
+            print(f"   ✓ Assignment type: {assignment.metadata.get('perceptron_type')}")
     
     # Test perceptron training
     print("\n9. Testing perceptron training...")
@@ -160,7 +158,7 @@ def test_full_workflow():
     
     # Run a simplified episode
     print("   Running learning episode...")
-    results = pipeline.run_episode(training_data)
+    results = pipeline.run_episode(training_data, perceptrons=dict(detector.perceptrons))
     
     print(f"   ✓ Episode {results['episode_id']} completed")
     print(f"   ✓ Steps executed: {len(results['steps'])}")

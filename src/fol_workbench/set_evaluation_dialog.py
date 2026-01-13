@@ -1155,16 +1155,39 @@ class SetEvaluationDialog(QDialog):
     def _save_breadcrumb_to_modules(self, breadcrumb: Dict[str, Any]):
         """Save breadcrumb to confidence evaluator, feature extractor, hyperparameter tuner, database, and ikyke format."""
         # Save to confidence evaluator
-        if self.confidence_evaluator and breadcrumb.get("data", {}).get("avg_accuracy"):
-            self.confidence_evaluator.record_performance(
-                accuracy=breadcrumb["data"].get("avg_accuracy", 0.0),
-                confidence=breadcrumb["data"].get("avg_confidence", 0.0),
-                sample_size=breadcrumb["data"].get("perceptrons_evaluated", 1)
-            )
+        if self.confidence_evaluator:
+            self.confidence_evaluator.add_learning_breadcrumb(breadcrumb)
+            if breadcrumb.get("data", {}).get("avg_accuracy"):
+                self.confidence_evaluator.record_performance(
+                    accuracy=breadcrumb["data"].get("avg_accuracy", 0.0),
+                    confidence=breadcrumb["data"].get("avg_confidence", 0.0),
+                    sample_size=breadcrumb["data"].get("perceptrons_evaluated", 1)
+                )
+        
+        # Save to feature extractor
+        if self.feature_extractor:
+            self.feature_extractor.add_learning_breadcrumb(breadcrumb)
+        
+        # Save to hyperparameter tuner
+        if self.hyperparameter_tuner:
+            self.hyperparameter_tuner.add_learning_breadcrumb(breadcrumb)
+            if breadcrumb.get("event_type") == "llm_reevaluation":
+                try:
+                    from .puzzle_detection.hyperparameter_tuner import EpisodeResult, HyperparameterConfig
+                    episode_result = EpisodeResult(
+                        episode_id=len(self.breadcrumbs),
+                        config=HyperparameterConfig(),
+                        average_accuracy=breadcrumb["data"].get("avg_accuracy", 0.0),
+                        average_confidence=breadcrumb["data"].get("avg_confidence", 0.0),
+                        performance_metrics=breadcrumb["data"]
+                    )
+                    self.hyperparameter_tuner.record_episode_result(episode_result)
+                except Exception:
+                    pass
         
         # Save to database
         if self.database:
-            # Store breadcrumb in database metadata
+            self.database.add_learning_breadcrumb(breadcrumb)
             try:
                 # Create a task or store in metadata
                 self.database.create_task(
@@ -1178,21 +1201,6 @@ class SetEvaluationDialog(QDialog):
                 )
             except Exception:
                 pass  # Database might not be fully initialized
-        
-        # Save to hyperparameter tuner (if episode result)
-        if self.hyperparameter_tuner and breadcrumb.get("event_type") == "llm_reevaluation":
-            try:
-                from .puzzle_detection.hyperparameter_tuner import EpisodeResult, HyperparameterConfig
-                episode_result = EpisodeResult(
-                    episode_id=len(self.breadcrumbs),
-                    config=HyperparameterConfig(),
-                    average_accuracy=breadcrumb["data"].get("avg_accuracy", 0.0),
-                    average_confidence=breadcrumb["data"].get("avg_confidence", 0.0),
-                    performance_metrics=breadcrumb["data"]
-                )
-                self.hyperparameter_tuner.record_episode_result(episode_result)
-            except Exception:
-                pass
     
     def _show_insights(self):
         """Show learning insights and breadcrumbs."""

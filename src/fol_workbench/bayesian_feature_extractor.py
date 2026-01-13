@@ -341,16 +341,22 @@ class BayesianFeatureExtractor:
             for attr in class_layer.attributes:
                 # Use Bayesian inference to compute posterior
                 if attr.prior_distribution:
-                    # Simple Bayesian update (can be extended)
-                    posterior = self._bayesian_update(attr, data)
-                    attr.posterior_distribution = posterior
-                    attr.confidence = max(posterior.values()) if posterior else 0.0
-                    
-                    class_features[attr.name] = {
-                        "value": attr.value,
-                        "confidence": attr.confidence,
-                        "posterior": posterior
-                    }
+                    # Only compute a posterior when we have evidence for this attribute.
+                    # Otherwise, avoid scoring based on priors alone (which can bias selection).
+                    if attr.name in data:
+                        posterior = self._bayesian_update(attr, data)
+                        attr.posterior_distribution = posterior
+                        attr.confidence = max(posterior.values()) if posterior else 0.0
+                        class_features[attr.name] = {
+                            "value": attr.value,
+                            "confidence": attr.confidence,
+                            "posterior": posterior
+                        }
+                    else:
+                        class_features[attr.name] = {
+                            "value": attr.value,
+                            "confidence": 0.0
+                        }
                 else:
                     class_features[attr.name] = {
                         "value": attr.value,
@@ -378,18 +384,28 @@ class BayesianFeatureExtractor:
         # Update based on observed data (likelihood update)
         if attr.name in data:
             observed_value = str(data[attr.name])  # Convert to string for consistency
-            
-            # If we have a prior for this value, update it
-            if observed_value in posterior:
-                # Bayesian update: multiply by likelihood (boost factor)
-                posterior[observed_value] *= 1.5
+
+            # Support two keying styles:
+            # - direct value keys: "True", "False", "high", ...
+            # - namespaced keys:   "has_text_True", "confidence_bin_high", ...
+            direct_key = observed_value
+            namespaced_key = f"{attr.name}_{observed_value}"
+
+            if direct_key in posterior:
+                boosted_key = direct_key
+            elif namespaced_key in posterior:
+                boosted_key = namespaced_key
             else:
-                # New value: add with low prior probability
-                posterior[observed_value] = 0.1
-            
+                # New value: add with low prior probability (direct-key style)
+                boosted_key = direct_key
+                posterior[boosted_key] = 0.1
+
+            # Bayesian update: multiply by likelihood (boost factor)
+            posterior[boosted_key] *= 1.5
+
             # Slight decay for unobserved values (optional, for normalization)
-            for key in posterior:
-                if key != observed_value:
+            for key in list(posterior.keys()):
+                if key != boosted_key:
                     posterior[key] *= 0.95
         
         # Normalize to ensure probabilities sum to 1

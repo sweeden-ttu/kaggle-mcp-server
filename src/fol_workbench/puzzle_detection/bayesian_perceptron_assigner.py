@@ -44,9 +44,15 @@ class BayesianPerceptronAssigner:
     - Layer 3: "Assignment Layer" - learned assignments based on confidence
     """
     
-    def __init__(self):
+    PERCEPTRON_TYPES: Tuple[str, ...] = (
+        "TextPuzzlePerceptron",
+        "ImagePuzzlePerceptron",
+        "QuestionPuzzlePerceptron",
+    )
+
+    def __init__(self, bayesian_extractor: Optional[BayesianFeatureExtractor] = None):
         """Initialize Bayesian perceptron assigner."""
-        self.bayesian_extractor = BayesianFeatureExtractor()
+        self.bayesian_extractor = bayesian_extractor or BayesianFeatureExtractor()
         self._initialize_layers()
         
         # Track perceptron assignments
@@ -55,41 +61,135 @@ class BayesianPerceptronAssigner:
     def _initialize_layers(self):
         """Initialize BayesianFeatureExtractor layers."""
         # Layer 1: Grid Features
-        self.bayesian_extractor.create_layer(1, "Grid Features")
+        if 1 not in self.bayesian_extractor.layers:
+            self.bayesian_extractor.create_layer(1, "Grid Features")
         
         # Layer 2: Perceptron Types
-        self.bayesian_extractor.create_layer(2, "Perceptron Types")
+        if 2 not in self.bayesian_extractor.layers:
+            self.bayesian_extractor.create_layer(2, "Perceptron Types")
         
         # Layer 3: Assignment Layer
-        self.bayesian_extractor.create_layer(3, "Assignment Layer")
-        
-        # Add base perceptron types to Layer 2
+        if 3 not in self.bayesian_extractor.layers:
+            self.bayesian_extractor.create_layer(3, "Assignment Layer")
+
+        # Add perceptron-type models (Layer 2) with meaningful priors.
+        # Note: BayesianFeatureExtractor's update uses stringified evidence values,
+        # so boolean priors are keyed by "True"/"False" and bins by strings.
+        self._ensure_perceptron_type_models()
+
+    def _ensure_perceptron_type_models(self):
+        """Ensure Layer 2 has perceptron-type classes with priors over grid features."""
+        def bool_attr(name: str, p_true: float) -> Attribute:
+            p_true = float(np.clip(p_true, 0.0, 1.0))
+            p_false = 1.0 - p_true
+            return Attribute(
+                name=name,
+                attr_type=AttributeType.BOOLEAN,
+                value=None,
+                prior_distribution={"True": p_true, "False": p_false},
+            )
+
+        def cat_attr(name: str, priors: Dict[str, float]) -> Attribute:
+            # Normalize
+            total = float(sum(float(v) for v in priors.values()))
+            if total <= 0:
+                priors = {"unknown": 1.0}
+                total = 1.0
+            priors = {str(k): float(v) / total for k, v in priors.items()}
+            return Attribute(
+                name=name,
+                attr_type=AttributeType.CATEGORICAL,
+                value=None,
+                prior_distribution=priors,
+            )
+
+        # Shared bins for numeric-ish features
+        # (we pass these bins as categorical evidence rather than raw floats)
+        text_bins = {"low": 0.25, "mid": 0.50, "high": 0.25}
+        img_bins = {"low": 0.20, "mid": 0.40, "high": 0.40}
+
+        # TextPuzzlePerceptron: expects text/handwriting, not necessarily images/questions.
         self.bayesian_extractor.add_class_to_layer(
             layer_id=2,
             class_name="TextPuzzlePerceptron",
             attributes=[
-                Attribute("confidence", AttributeType.NUMERICAL, value=0.0),
-                Attribute("accuracy", AttributeType.NUMERICAL, value=0.0)
-            ]
+                bool_attr("has_text", 0.75),
+                bool_attr("has_handwriting", 0.55),
+                bool_attr("has_image", 0.20),
+                bool_attr("has_question", 0.25),
+                cat_attr("text_confidence_bin", dict(text_bins)),
+                cat_attr("image_complexity_bin", dict(img_bins)),
+                cat_attr("question_type", {"none": 0.60, "general": 0.25, "wh_question": 0.10, "selection": 0.05}),
+                # Perceptron-quality attributes (used by selection; not provided during assignment)
+                cat_attr("confidence_bin", {"low": 0.40, "mid": 0.40, "high": 0.20}),
+                cat_attr("accuracy_bin", {"low": 0.40, "mid": 0.40, "high": 0.20}),
+            ],
         )
-        
+
+        # ImagePuzzlePerceptron: expects images/high complexity, not necessarily text.
         self.bayesian_extractor.add_class_to_layer(
             layer_id=2,
             class_name="ImagePuzzlePerceptron",
             attributes=[
-                Attribute("confidence", AttributeType.NUMERICAL, value=0.0),
-                Attribute("accuracy", AttributeType.NUMERICAL, value=0.0)
-            ]
+                bool_attr("has_text", 0.25),
+                bool_attr("has_handwriting", 0.10),
+                bool_attr("has_image", 0.85),
+                bool_attr("has_question", 0.20),
+                cat_attr("text_confidence_bin", dict(text_bins)),
+                cat_attr("image_complexity_bin", {"low": 0.10, "mid": 0.30, "high": 0.60}),
+                cat_attr("question_type", {"none": 0.70, "general": 0.20, "wh_question": 0.07, "selection": 0.03}),
+                cat_attr("confidence_bin", {"low": 0.40, "mid": 0.40, "high": 0.20}),
+                cat_attr("accuracy_bin", {"low": 0.40, "mid": 0.40, "high": 0.20}),
+            ],
         )
-        
+
+        # QuestionPuzzlePerceptron: expects question patterns, especially selection/wh.
         self.bayesian_extractor.add_class_to_layer(
             layer_id=2,
             class_name="QuestionPuzzlePerceptron",
             attributes=[
-                Attribute("confidence", AttributeType.NUMERICAL, value=0.0),
-                Attribute("accuracy", AttributeType.NUMERICAL, value=0.0)
-            ]
+                bool_attr("has_text", 0.55),
+                bool_attr("has_handwriting", 0.10),
+                bool_attr("has_image", 0.25),
+                bool_attr("has_question", 0.90),
+                cat_attr("text_confidence_bin", dict(text_bins)),
+                cat_attr("image_complexity_bin", dict(img_bins)),
+                cat_attr("question_type", {"selection": 0.55, "wh_question": 0.30, "general": 0.10, "none": 0.05}),
+                cat_attr("confidence_bin", {"low": 0.40, "mid": 0.40, "high": 0.20}),
+                cat_attr("accuracy_bin", {"low": 0.40, "mid": 0.40, "high": 0.20}),
+            ],
         )
+
+    def _bin01(self, x: float, low: float = 0.33, high: float = 0.66) -> str:
+        """Bin a [0,1] float into categorical buckets."""
+        try:
+            v = float(x)
+        except Exception:
+            return "unknown"
+        if v < low:
+            return "low"
+        if v < high:
+            return "mid"
+        return "high"
+
+    def _extract_attr_confidence(self, class_features: Dict[str, Any], attr_name: str) -> float:
+        """Safely extract a scalar confidence for an attribute from extract_features() output."""
+        v = class_features.get(attr_name)
+        if isinstance(v, dict):
+            c = v.get("confidence", 0.0)
+            return float(c) if isinstance(c, (int, float)) else 0.0
+        return 0.0
+
+    def _infer_perceptron_type_from_id(self, perceptron_id: str) -> Optional[str]:
+        """Heuristic mapping from perceptron IDs to type-class names."""
+        pid = (perceptron_id or "").lower()
+        if "question" in pid:
+            return "QuestionPuzzlePerceptron"
+        if "image" in pid:
+            return "ImagePuzzlePerceptron"
+        if "text" in pid or "hand" in pid:
+            return "TextPuzzlePerceptron"
+        return None
     
     def assign_perceptron(
         self,
@@ -115,49 +215,68 @@ class BayesianPerceptronAssigner:
             class_name=grid_features.square_id,
             attributes=attributes
         )
-        
-        # Extract features using Bayesian inference
-        features_data = {
-            'has_text': grid_features.has_text,
-            'has_handwriting': grid_features.has_handwriting,
-            'has_image': grid_features.has_image,
-            'has_question': grid_features.has_question,
-            'text_confidence': grid_features.text_confidence,
-            'image_complexity': grid_features.image_complexity
+
+        # Discretize numeric-ish features into bins for the Bayesian extractor
+        evidence = {
+            "has_text": grid_features.has_text,
+            "has_handwriting": grid_features.has_handwriting,
+            "has_image": grid_features.has_image,
+            "has_question": grid_features.has_question,
+            "text_confidence_bin": self._bin01(grid_features.text_confidence),
+            "image_complexity_bin": self._bin01(grid_features.image_complexity),
+            "question_type": grid_features.question_type or "none",
         }
-        
-        # Get features from Layer 2 (Perceptron Types)
-        layer2_features = self.bayesian_extractor.extract_features(features_data, layer_id=2)
-        
-        # Select best perceptron based on confidence
-        best_perceptron_id = None
-        best_confidence = 0.0
-        assignment_confidence = 0.0
-        
-        # Match grid features to perceptron types
-        perceptron_type = self._determine_perceptron_type(grid_features)
-        
-        if perceptron_type in layer2_features:
-            perceptron_data = layer2_features[perceptron_type]
-            assignment_confidence = perceptron_data.get('confidence', 0.0)
-            
-            # Find perceptron with highest confidence for this type
-            for pid, perceptron in available_perceptrons.items():
-                if perceptron.confidence > best_confidence:
-                    best_confidence = perceptron.confidence
-                    best_perceptron_id = pid
-        
-        # If no perceptron found, use default based on type
+
+        layer2_features = self.bayesian_extractor.extract_features(evidence, layer_id=2)
+
+        # Score each perceptron type by mean attribute confidence for observed evidence keys.
+        type_scores: Dict[str, float] = {}
+        for type_name in self.PERCEPTRON_TYPES:
+            class_features = layer2_features.get(type_name, {}) if isinstance(layer2_features, dict) else {}
+            if not isinstance(class_features, dict):
+                type_scores[type_name] = 0.0
+                continue
+
+            confs = []
+            for k in evidence.keys():
+                confs.append(self._extract_attr_confidence(class_features, k))
+            type_scores[type_name] = float(np.mean(confs)) if confs else 0.0
+
+        # Pick the best type, fallback to deterministic heuristic if we have no signal.
+        best_type = max(type_scores.items(), key=lambda kv: kv[1])[0] if type_scores else self._determine_perceptron_type(grid_features)
+        best_type_score = type_scores.get(best_type, 0.0)
+        if best_type_score <= 0.0:
+            best_type = self._determine_perceptron_type(grid_features)
+            best_type_score = type_scores.get(best_type, 0.0)
+
+        # Choose a perceptron instance that matches the selected type (by ID heuristic).
+        best_perceptron_id: Optional[str] = None
+        best_perceptron_confidence = -1.0
+        for pid, perceptron in available_perceptrons.items():
+            pid_type = self._infer_perceptron_type_from_id(pid)
+            if pid_type is not None and pid_type != best_type:
+                continue
+            if float(perceptron.confidence) > best_perceptron_confidence:
+                best_perceptron_confidence = float(perceptron.confidence)
+                best_perceptron_id = pid
+
+        # Fallback: if we couldn't match by type, just pick the highest-confidence perceptron.
         if best_perceptron_id is None and available_perceptrons:
-            # Use first available perceptron
-            best_perceptron_id = list(available_perceptrons.keys())[0]
-            best_confidence = available_perceptrons[best_perceptron_id].confidence
+            best_perceptron_id, best_perceptron_confidence = max(
+                ((pid, float(p.confidence)) for pid, p in available_perceptrons.items()),
+                key=lambda kv: kv[1],
+            )
         
         assignment = PerceptronAssignment(
             square_id=grid_features.square_id,
             perceptron_id=best_perceptron_id,
-            confidence=best_confidence,
-            assignment_confidence=assignment_confidence
+            confidence=float(best_perceptron_confidence) if best_perceptron_confidence >= 0 else 0.0,
+            assignment_confidence=float(best_type_score),
+            metadata={
+                "perceptron_type": best_type,
+                "type_scores": type_scores,
+                "evidence": evidence,
+            },
         )
         
         self.assignments[grid_features.square_id] = assignment
@@ -177,35 +296,63 @@ class BayesianPerceptronAssigner:
             was_correct: Whether the assignment was correct
             perceptron_confidence: Confidence of the perceptron prediction
         """
-        # Determine perceptron type from assignment
-        # This would be stored in metadata or inferred
-        
-        # Update Bayesian prior based on success
-        if was_correct:
-            # Increase confidence for this type of assignment
-            prior_update = {
-                'confidence': perceptron_confidence,
-                'accuracy': 1.0 if was_correct else 0.0
-            }
-        else:
-            prior_update = {
-                'confidence': perceptron_confidence * 0.9,  # Slight decrease
-                'accuracy': 0.0
-            }
-        
-        # Update Layer 2 perceptron types
-        # This would need to know which perceptron type was used
-        # For now, update all types proportionally
-        for class_name in ["TextPuzzlePerceptron", "ImagePuzzlePerceptron", "QuestionPuzzlePerceptron"]:
-            try:
-                self.bayesian_extractor.update_bayesian_prior(
-                    layer_id=2,
-                    class_name=class_name,
-                    prior=prior_update
-                )
-            except ValueError:
-                # Class might not exist yet
-                pass
+        # Update priors only for the perceptron type actually used for this assignment.
+        perceptron_type = assignment.metadata.get("perceptron_type") if assignment.metadata else None
+        if perceptron_type not in self.PERCEPTRON_TYPES:
+            perceptron_type = self._infer_perceptron_type_from_id(assignment.perceptron_id or "") or "TextPuzzlePerceptron"
+
+        evidence = (assignment.metadata or {}).get("evidence", {})
+        if not isinstance(evidence, dict):
+            evidence = {}
+
+        layer = self.bayesian_extractor.layers.get(2)
+        if not layer:
+            return
+        class_layer = layer.get_class(perceptron_type)
+        if not class_layer:
+            return
+
+        # Simple evidence-based prior update:
+        # - On correct: boost observed value probability.
+        # - On incorrect: decay observed value probability slightly.
+        boost = 1.10 if was_correct else 0.90
+        floor = 1e-6
+        for attr in class_layer.attributes:
+            if not attr.prior_distribution:
+                continue
+            if attr.name not in evidence:
+                continue
+            observed_value = str(evidence[attr.name])
+
+            # Support both keying styles.
+            keys_to_try = [observed_value, f"{attr.name}_{observed_value}"]
+            key = next((k for k in keys_to_try if k in attr.prior_distribution), None)
+            if key is None:
+                key = observed_value
+                attr.prior_distribution[key] = 0.1
+
+            attr.prior_distribution[key] = max(floor, float(attr.prior_distribution.get(key, 0.0)) * boost)
+            # Renormalize
+            total = float(sum(float(v) for v in attr.prior_distribution.values()))
+            if total > 0:
+                attr.prior_distribution = {k: float(v) / total for k, v in attr.prior_distribution.items()}
+
+        # Track perceptron quality bins as additional evidence signals.
+        confidence_bin = self._bin01(perceptron_confidence)
+        quality_evidence = {"confidence_bin": confidence_bin}
+        for attr in class_layer.attributes:
+            if attr.name not in quality_evidence or not attr.prior_distribution:
+                continue
+            observed_value = str(quality_evidence[attr.name])
+            if observed_value in attr.prior_distribution:
+                attr.prior_distribution[observed_value] = max(floor, float(attr.prior_distribution[observed_value]) * boost)
+                total = float(sum(float(v) for v in attr.prior_distribution.values()))
+                if total > 0:
+                    attr.prior_distribution = {k: float(v) / total for k, v in attr.prior_distribution.items()}
+
+        self.bayesian_extractor.log_entry(
+            f"Updated priors for {perceptron_type} (correct={was_correct}, p_conf={perceptron_confidence:.3f})"
+        )
     
     def select_high_confidence_perceptrons(
         self,
@@ -228,34 +375,26 @@ class BayesianPerceptronAssigner:
         selected = []
         
         for perceptron_id, perceptron in perceptrons.items():
-            # Evaluate perceptron using Bayesian inference
-            # Create a feature vector representing this perceptron
-            perceptron_features = {
-                'confidence': perceptron.confidence,
-                'accuracy': perceptron.accuracy,
-                'training_count': perceptron.training_count / 1000.0  # Normalize
+            # Evaluate perceptron using Bayesian inference over coarse quality bins.
+            quality_evidence = {
+                "confidence_bin": self._bin01(perceptron.confidence),
+                "accuracy_bin": self._bin01(perceptron.accuracy),
             }
-            
-            # Extract features to get posterior confidence
-            layer2_features = self.bayesian_extractor.extract_features(
-                perceptron_features,
-                layer_id=2
-            )
-            
-            # Get maximum confidence from all perceptron types
-            max_confidence = 0.0
-            for class_name, class_features in layer2_features.items():
-                conf = class_features.get('confidence', 0.0)
-                # Handle case where confidence might be a dict or float
-                if isinstance(conf, dict):
-                    conf = conf.get('confidence', 0.0) if 'confidence' in conf else 0.0
-                elif not isinstance(conf, (int, float)):
-                    conf = 0.0
-                max_confidence = max(max_confidence, float(conf))
-            
-            # Also consider the perceptron's own confidence
-            combined_confidence = (max_confidence + perceptron.confidence) / 2.0
-            
+
+            layer2_features = self.bayesian_extractor.extract_features(quality_evidence, layer_id=2)
+
+            max_score = 0.0
+            for type_name, class_features in (layer2_features or {}).items():
+                if not isinstance(class_features, dict):
+                    continue
+                confs = [
+                    self._extract_attr_confidence(class_features, "confidence_bin"),
+                    self._extract_attr_confidence(class_features, "accuracy_bin"),
+                ]
+                score = float(np.mean(confs)) if confs else 0.0
+                max_score = max(max_score, score)
+
+            combined_confidence = float(np.mean([float(perceptron.confidence), float(perceptron.accuracy), max_score]))
             if combined_confidence >= threshold:
                 selected.append((perceptron_id, perceptron))
         

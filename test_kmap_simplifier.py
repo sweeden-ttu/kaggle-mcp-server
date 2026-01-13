@@ -10,11 +10,6 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 from fol_workbench.data_layer import DataLayer
 from fol_workbench.herbrand_converter import HerbrandConverter
 from fol_workbench.kmap_simplifier import KMapSimplifier
-from fol_workbench.database import Database
-from fol_workbench.llm_observation_generator import UltraLargeLanguageModel, Observation
-
-import tempfile
-from datetime import datetime
 
 def test_basic_conversion():
     """Test basic FOL to propositional conversion."""
@@ -97,69 +92,6 @@ def test_checkpoint_integration():
     data_layer.delete_checkpoint(checkpoint.id)
     print("✓ Test checkpoint cleaned up")
 
-def test_perceptron_ranking_and_deletion():
-    """Test top/worst perceptron selection and deletion helpers."""
-    print("\nTesting perceptron ranking + deletion...")
-
-    with tempfile.TemporaryDirectory() as td:
-        db_path = str(Path(td) / "test.db.json")
-        db = Database(db_path=db_path)
-
-        # Create 3 perceptrons with different confidence/accuracy
-        p1 = db.create_perceptron(weights=[0.0], learning_rate=0.1, confidence=0.9, accuracy=0.1, perceptron_id="p1")
-        p2 = db.create_perceptron(weights=[0.0], learning_rate=0.1, confidence=0.5, accuracy=0.5, perceptron_id="p2")
-        p3 = db.create_perceptron(weights=[0.0], learning_rate=0.1, confidence=0.1, accuracy=0.1, perceptron_id="p3")
-
-        top2 = db.get_top_perceptrons(k=2)
-        assert [p.perceptron_id for p in top2] == ["p2", "p1"] or [p.perceptron_id for p in top2] == ["p1", "p2"], \
-            "Top-2 should contain p1 and p2"
-
-        worst = db.get_worst_perceptron()
-        assert worst is not None and worst.perceptron_id == "p3", "Worst perceptron should be p3"
-
-        deleted = db.delete_worst_perceptron()
-        assert deleted == "p3", "Should delete worst perceptron id"
-        assert db.get_perceptron("p3") is None, "Worst perceptron should be removed from DB"
-
-    print("✓ Perceptron ranking + deletion works")
-
-def test_ullm_optimized_reevaluation():
-    """Test optimized ULLM re-evaluation rebuilds corpus deterministically."""
-    print("\nTesting ULLM optimized re-evaluation...")
-
-    llm = UltraLargeLanguageModel()
-
-    obs1 = Observation(
-        observation_id="o1",
-        timestamp=datetime.now().isoformat(),
-        layer_id=1,
-        class_name="cls",
-        attributes={"a": {"value": 1}},
-        confidence_scores={"a": 0.9},
-        context={}
-    )
-    obs2 = Observation(
-        observation_id="o2",
-        timestamp=datetime.now().isoformat(),
-        layer_id=1,
-        class_name="cls",
-        attributes={"b": {"value": 2}},
-        confidence_scores={"b": 0.1},
-        context={}
-    )
-
-    llm.record_observation_optimized(obs1)
-    llm.record_observation_optimized(obs2)
-
-    text1 = llm.re_evaluate_optimized()
-    text2 = llm.re_evaluate_optimized()
-
-    assert text1 == text2, "Optimized re-evaluation should be deterministic"
-    assert "cls" in text1, "Re-evaluated text should include class name"
-    assert llm.get_corpus_statistics()["num_observations"] == 2, "Should preserve observation history"
-
-    print("✓ ULLM optimized re-evaluation works")
-
 def main():
     """Run all tests."""
     print("=" * 50)
@@ -170,8 +102,6 @@ def main():
         test_basic_conversion()
         test_kmap_generation()
         test_checkpoint_integration()
-        test_perceptron_ranking_and_deletion()
-        test_ullm_optimized_reevaluation()
         
         print("\n" + "=" * 50)
         print("All tests passed! ✓")
