@@ -62,6 +62,7 @@ class IkykeProtocol:
         # Create or load container
         if container_path and container_path.exists():
             self.container = IkykeContainerFormat.load(container_path)
+            self.container_path = container_path
         else:
             self.container = IkykeContainerFormat.create(workflow.header.workflow_id)
             if container_path:
