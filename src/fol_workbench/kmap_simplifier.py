@@ -6,7 +6,7 @@ for Boolean expressions. Supports 2, 3, and 4 variable K-maps with
 prime implicant extraction and minimal sum-of-products generation.
 """
 
-from typing import Dict, List, Set, Tuple, Optional
+from typing import Dict, List, Set, Tuple, Optional, Any
 from dataclasses import dataclass
 from enum import Enum
 

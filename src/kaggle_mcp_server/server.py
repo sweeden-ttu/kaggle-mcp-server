@@ -936,6 +936,128 @@ def call_reverse_simulation_with_herbrand(
         return f"Error calling reverse simulation: {str(e)}"
 
 
+@mcp.tool()
+def create_gpg_signature(
+    file_path: str,
+    key_id: Optional[str] = None,
+    passphrase: Optional[str] = None,
+    output_path: Optional[str] = None,
+    detach: bool = True,
+    armor: bool = True
+) -> str:
+    """
+    Create a GPG signature for a file.
+
+    Args:
+        file_path: Path to the file to sign
+        key_id: ID of the key to sign with (optional, uses default if not specified)
+        passphrase: Optional passphrase for the GPG key
+        output_path: Optional path for the signature file
+        detach: Create a detached signature (default: True)
+        armor: Create ASCII armored output (default: True)
+
+    Returns:
+        Success message with path to signature file
+    """
+    try:
+        if not os.path.exists(file_path):
+            return f"Error: File not found: {file_path}"
+        
+        cmd = ["gpg", "--batch", "--yes"]
+        
+        if key_id:
+            cmd.extend(["--local-user", key_id])
+        
+        if passphrase:
+            cmd.extend(["--passphrase", passphrase, "--pinentry-mode", "loopback"])
+            
+        if armor:
+            cmd.append("--armor")
+            
+        if detach:
+            cmd.append("--detach-sign")
+        else:
+            cmd.append("--sign")
+            
+        if output_path:
+            cmd.extend(["--output", output_path])
+            
+        cmd.append(file_path)
+        
+      sing Agent2's private key and passphrase.
+Verifies the decrypted content matches the original message.
+You can run the test using:
+￼
+python test_agent_encrypted_comms.py
+  result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode != 0:
+            return f"Error creating signature: {result.stderr}"
+            
+        return f"Successfully created signature for {file_path}"
+        
+    except Exception as e:
+        return f"Error executing GPG: {str(e)}"
+
+
+@mcp.tool()
+def export_gpg_public_key(
+    key_id: Optional[str] = None,
+    output_path: Optional[str] = None,
+    armor: bool = True,
+    strict_openpgp: bool = False
+) -> str:
+    """
+    Export a GPG public key.
+
+    Args:
+        key_id: ID of the key to export (optional, exports all if not specified)
+        output_path: Optional path for the exported key file
+        armor: Create ASCII armored output (default: True)
+        strict_openpgp: Use strict OpenPGP behavior (default: False)
+
+    Returns:
+        Success message with path to exported key or key content
+    """
+    try:
+        cmd = ["gpg", "--batch", "--yes"]
+        
+        if strict_openpgp:
+            cmd.append("--openpgp")
+            
+        if armor:
+            cmd.append("--armor")
+            
+        cmd.append("--export")
+        
+        if output_path:
+            cmd.extend(["--output", output_path])
+            
+        if key_id:
+            cmd.append(key_id)
+            
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode != 0:
+            return f"Error exporting key: {result.stderr}"
+            
+        if output_path:
+            return f"Successfully exported public key to {output_path}"
+        else:
+            return result.stdout
+            
+    except Exception as e:
+        return f"Error executing GPG: {str(e)}"
+
+
 def main():
     """Run the Kaggle MCP server."""
     mcp.run()
