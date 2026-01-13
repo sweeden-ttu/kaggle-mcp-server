@@ -124,12 +124,27 @@ class HerbrandConverter:
         # Remove whitespace for easier parsing
         formula_clean = formula.replace(" ", "")
         
-        # Look for Implies(..., ...)
-        match = re.match(r'Implies\((.+?),(.+?)\)$', formula_clean, re.DOTALL)
-        if match:
-            premise = match.group(1).strip()
-            conclusion = match.group(2).strip()
-            return Implication(premise=premise, conclusion=conclusion)
+        # Look for Implies(..., ...) - handle nested parentheses
+        if formula_clean.startswith("Implies(") and formula_clean.endswith(")"):
+            # Find the comma that separates premise and conclusion
+            # by tracking parentheses depth
+            depth = 0
+            comma_pos = -1
+            for i, char in enumerate(formula_clean[8:], start=8):  # Start after "Implies("
+                if char == '(':
+                    depth += 1
+                elif char == ')':
+                    depth -= 1
+                    if depth < 0:
+                        break
+                elif char == ',' and depth == 0:
+                    comma_pos = i
+                    break
+            
+            if comma_pos > 0:
+                premise = formula_clean[8:comma_pos].strip()
+                conclusion = formula_clean[comma_pos+1:-1].strip()  # -1 to remove closing )
+                return Implication(premise=premise, conclusion=conclusion)
         
         # Also check for → or -> notation
         if '→' in formula or '->' in formula:

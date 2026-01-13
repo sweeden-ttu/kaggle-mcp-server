@@ -341,6 +341,11 @@ class MainWindow(QMainWindow):
         ml_strategy_action.triggered.connect(self._open_ml_strategy)
         tools_menu.addAction(ml_strategy_action)
         
+        # Set Evaluation Dialog
+        set_eval_action = QAction("&Set Evaluation (Prolog)", self)
+        set_eval_action.setShortcut("Ctrl+E")
+        set_eval_action.triggered.connect(self._open_set_evaluation)
+        tools_menu.addAction(set_eval_action)
         # K-map Simplifier
         kmap_action = QAction("K-map &Simplifier", self)
         kmap_action.setShortcut("Ctrl+K")
@@ -993,6 +998,9 @@ class MainWindow(QMainWindow):
         dialog = MLStrategyDialog(self)
         dialog.exec()
     
+    def _open_set_evaluation(self):
+        """Open Set Evaluation Dialog for Prolog generation."""
+        dialog = SetEvaluationDialog(self)
     def _show_kmap_simplifier(self):
         """Show K-map Simplifier dialog."""
         dialog = KMapDialog(self.data_layer, self)

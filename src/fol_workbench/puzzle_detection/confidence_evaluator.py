@@ -10,13 +10,15 @@ from dataclasses import dataclass, field
 from collections import deque
 import numpy as np
 from datetime import datetime, timedelta
-from scipy import stats
 
 try:
     from scipy.stats import ttest_ind
     SCIPY_AVAILABLE = True
 except ImportError:
     SCIPY_AVAILABLE = False
+    # Stub for ttest_ind if scipy not available
+    def ttest_ind(*args, **kwargs):
+        raise ImportError("scipy is required for statistical significance testing. Install with: pip install scipy")
 
 
 @dataclass

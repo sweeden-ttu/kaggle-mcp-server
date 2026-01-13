@@ -246,7 +246,12 @@ class BayesianPerceptronAssigner:
             max_confidence = 0.0
             for class_name, class_features in layer2_features.items():
                 conf = class_features.get('confidence', 0.0)
-                max_confidence = max(max_confidence, conf)
+                # Handle case where confidence might be a dict or float
+                if isinstance(conf, dict):
+                    conf = conf.get('confidence', 0.0) if 'confidence' in conf else 0.0
+                elif not isinstance(conf, (int, float)):
+                    conf = 0.0
+                max_confidence = max(max_confidence, float(conf))
             
             # Also consider the perceptron's own confidence
             combined_confidence = (max_confidence + perceptron.confidence) / 2.0
