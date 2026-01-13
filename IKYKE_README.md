@@ -304,3 +304,113 @@ The format is designed to be:
 - Extensible (add new fields)
 - Backward-compatible (version tracking)
 - Portable (platform-independent)
+
+## Integration with Perceptron Puzzle Detection System
+
+The IKYKE protocol can be extended to support perceptron-based puzzle detection workflows:
+
+### Perceptron Integration
+
+IKYKE containers now support perceptron data storage:
+- **PerceptronData**: Stores perceptron weights, learning rates, confidence scores, and accuracy metrics
+- **HerbrandData**: Stores Herbrand base ground instances, constants, predicates, and implications
+- Both can be added to containers via `add_perceptron()` and `add_herbrand_base()` methods
+
+### Suggested Workflow Extensions
+
+1. **Screenshot Capture Phase**: Add screenshot capture as a pre-processing step
+   ```json
+   "preprocessing": {
+     "screenshot_capture": {
+       "enabled": true,
+       "source": "torbrowser",
+       "grid_segmentation": true
+     }
+   }
+   ```
+
+2. **Feature Extraction Phase**: Integrate feature extraction into evaluation
+   ```json
+   "evaluation": {
+     "extract_features": true,
+     "feature_types": ["text", "image", "question"],
+     "use_perceptrons": true
+   }
+   ```
+
+3. **Learning Pipeline Integration**: Connect IKYKE workflow to learning pipeline
+   - Use IKYKE containers to store perceptron training data
+   - Track learning episodes through IKYKE phases
+   - Store confidence evaluations in evaluation_results
+
+4. **Herbrand Base Evaluation**: Use Herbrand bases for implication evaluation
+   - Extract ground instances from formulas
+   - Evaluate implications using Herbrand base
+   - Store results in herbrand_bases field
+
+### Example: Perceptron Workflow
+
+```python
+from fol_workbench.ikyke_container import IkykeContainer, PerceptronData, HerbrandData
+from fol_workbench.ikyke_format import IkykeFileFormat
+
+# Create workflow with perceptron support
+workflow = IkykeFileFormat.create_default("Perceptron Puzzle Detection")
+
+# Create container
+container = IkykeContainer.create(workflow.header.workflow_id)
+
+# Add perceptron data
+perceptron = PerceptronData(
+    perceptron_id="perceptron_001",
+    weights=[0.5, 0.3, 0.2],
+    learning_rate=0.01,
+    confidence=0.85,
+    accuracy=0.92,
+    created=datetime.now().isoformat()
+)
+container.add_perceptron(perceptron)
+
+# Add Herbrand base data
+herbrand = HerbrandData(
+    herbrand_id="herbrand_001",
+    ground_instances=["P(a)", "P(b)", "Q(a)"],
+    constants=["a", "b"],
+    predicates=["P", "Q"],
+    implications=["Implies(P(a), Q(a))"],
+    created=datetime.now().isoformat()
+)
+container.add_herbrand_base(herbrand)
+
+# Save container
+IkykeContainerFormat.save(container, "perceptron_workflow.ikyke_container")
+```
+
+### Recommendations
+
+1. **Extend Workflow Phases**: Add new phases for perceptron-specific operations:
+   - `PERCEPTRON_TRAINING`: Train perceptrons on extracted features
+   - `CONFIDENCE_EVALUATION`: Evaluate perceptron confidence scores
+   - `HERBRAND_EVALUATION`: Evaluate implications using Herbrand bases
+
+2. **Metadata Extraction**: Use vocabulary metadata extraction to:
+   - Identify predicates and constants automatically
+   - Generate Herbrand bases from formulas
+   - Extract implications for evaluation
+
+3. **Feedback Integration**: Collect client feedback on:
+   - Perceptron accuracy
+   - Feature extraction quality
+   - Herbrand base completeness
+   - Implication evaluation results
+
+4. **Autocomplete Enhancement**: After reverse simulation:
+   - Generate autocomplete suggestions based on model formulas
+   - Learn from successful formula patterns
+   - Improve suggestion confidence based on usage
+
+5. **Hilbert System Integration**: Use Hilbert base predicates (Not, And, Or, Implies) for:
+   - Formula normalization
+   - Implication evaluation
+   - Herbrand base generation
+   - Semantic model construction

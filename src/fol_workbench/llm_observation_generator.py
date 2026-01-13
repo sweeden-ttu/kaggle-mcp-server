@@ -81,6 +81,52 @@ class UltraLargeLanguageModel:
         # Generate text immediately
         text = self.generate_description(observation)
         self.text_corpus.append(text)
+
+    def generate_description_optimized(self, observation: Observation) -> str:
+        """
+        Generate descriptive text with a performance-optimized, deterministic path.
+
+        Avoids random choices and extra branching to be fast and reproducible.
+        """
+        # Deterministic template (first one) for speed and reproducibility
+        template = self.templates[0] if self.templates else (
+            "{class_name}: {attribute_pattern} ({confidence_level} confidence)."
+        )
+
+        attr_pattern = self._format_attributes(observation.attributes)
+        conf_level = self._format_confidence(observation.confidence_scores)
+
+        return template.format(
+            class_name=observation.class_name,
+            attribute_pattern=attr_pattern,
+            confidence_level=conf_level,
+            observation_id=observation.observation_id,
+            layer_id=observation.layer_id,
+            interpretation="",
+            conclusion="",
+            confidence_detail="",
+            key_attributes="",
+            contextual_note="",
+            insight=""
+        )
+
+    def record_observation_optimized(self, observation: Observation):
+        """Record an observation and generate text using the optimized path."""
+        self.observation_history.append(observation)
+        self.text_corpus.append(self.generate_description_optimized(observation))
+
+    def re_evaluate_optimized(self, max_length: Optional[int] = None) -> str:
+        """
+        Rebuild the pretrained text using the optimized generation path.
+
+        This re-generates `text_corpus` from `observation_history` deterministically.
+        """
+        if not self.observation_history:
+            self.text_corpus = []
+            return "No experimental observations have been recorded yet."
+
+        self.text_corpus = [self.generate_description_optimized(o) for o in self.observation_history]
+        return self.generate_pretrained_text(max_length=max_length)
     
     def generate_description(self, observation: Observation) -> str:
         """Generate descriptive text for an observation."""

@@ -492,3 +492,9 @@ class HypothesisExperimentDialog(QDialog):
     def get_selected_experiment(self) -> Optional[Experiment]:
         """Get the selected experiment."""
         return self.selected_experiment
+    
+    def show_and_raise(self):
+        """Show the dialog and bring it to the front."""
+        self.show()
+        self.raise_()
+        self.activateWindow()

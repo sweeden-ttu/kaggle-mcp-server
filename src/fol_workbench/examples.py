@@ -1,6 +1,15 @@
 """Example FOL formulas for testing the workbench."""
 
+from .conversation_semantic_model import ConversationSemanticModel
+
+# Create semantic model to get assigned values
+_semantic_model = ConversationSemanticModel()
+_semantic_formula = _semantic_model.to_formula()
+_semantic_negated = _semantic_model.get_negated_formula()
+_semantic_export = _semantic_model.export_model()
+
 # Example formulas that can be used in the FOL Workbench
+# Updated with assigned values from conversation_semantic_model
 
 EXAMPLES = {
     "Simple Conjunction": "And(x, y)",
@@ -22,6 +31,15 @@ EXAMPLES = {
     "Three Variables": "And(x, Or(y, z))",
     
     "Nested Logic": "Implies(And(x, y), Or(z, Not(x)))",
+    
+    # Examples from conversation semantic model
+    "Semantic Model Formula": _semantic_formula,
+    
+    "Semantic Model Negated": _semantic_negated,
+    
+    "Semantic Implication": "Implies(implements(reverse_simulation_system), has_test_first_simulator(reverse_simulation_system))",
+    
+    "Semantic Dependency": "Implies(depends_on(design_feedback, test_first_simulator), And(design_feedback, test_first_simulator))",
 }
 
 # Example constraints

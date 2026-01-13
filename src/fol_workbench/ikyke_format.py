@@ -237,6 +237,7 @@ class IkykeWorkflow:
     analysis: AnalysisConfig
     formulas: List[str] = None  # Initial formulas to process
     constraints: List[str] = None  # Initial constraints
+    learning_breadcrumbs: List[Dict[str, Any]] = None  # Learning insights breadcrumbs
     
     def __post_init__(self):
         """Initialize default values."""
@@ -244,6 +245,8 @@ class IkykeWorkflow:
             self.formulas = []
         if self.constraints is None:
             self.constraints = []
+        if self.learning_breadcrumbs is None:
+            self.learning_breadcrumbs = []
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -256,7 +259,8 @@ class IkykeWorkflow:
             "query": self.query.to_dict(),
             "analysis": self.analysis.to_dict(),
             "formulas": self.formulas,
-            "constraints": self.constraints
+            "constraints": self.constraints,
+            "learning_breadcrumbs": self.learning_breadcrumbs
         }
     
     @classmethod
@@ -271,7 +275,8 @@ class IkykeWorkflow:
             query=QueryConfig.from_dict(data["query"]),
             analysis=AnalysisConfig.from_dict(data["analysis"]),
             formulas=data.get("formulas", []),
-            constraints=data.get("constraints", [])
+            constraints=data.get("constraints", []),
+            learning_breadcrumbs=data.get("learning_breadcrumbs", [])
         )
 
 
@@ -360,5 +365,31 @@ class IkykeFileFormat:
             run=RunConfig(),
             evaluation=EvaluationConfig(),
             query=QueryConfig(),
-            analysis=AnalysisConfig()
+            analysis=AnalysisConfig(),
+            learning_breadcrumbs=[]
         )
+    
+    def add_learning_breadcrumb(self, breadcrumb: Dict[str, Any]):
+        """
+        Add a learning breadcrumb to the workflow.
+        
+        Args:
+            breadcrumb: Dictionary containing breadcrumb data with keys:
+                - timestamp: ISO timestamp
+                - event_type: Type of event
+                - data: Event-specific data
+                - source: Source of the breadcrumb
+        """
+        self.learning_breadcrumbs.append(breadcrumb)
+        
+        # Keep only last 1000 breadcrumbs
+        if len(self.learning_breadcrumbs) > 1000:
+            self.learning_breadcrumbs = self.learning_breadcrumbs[-1000:]
+    
+    def get_learning_breadcrumbs(self) -> List[Dict[str, Any]]:
+        """Get all learning breadcrumbs."""
+        return self.learning_breadcrumbs.copy()
+    
+    def get_breadcrumbs_by_type(self, event_type: str) -> List[Dict[str, Any]]:
+        """Get breadcrumbs filtered by event type."""
+        return [bc for bc in self.learning_breadcrumbs if bc.get("event_type") == event_type]

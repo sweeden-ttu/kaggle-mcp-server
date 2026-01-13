@@ -5,7 +5,7 @@ Orchestrates the complete learning cycle:
 assign → iterate → evaluate → test → propose → infer → learn → save → optimize → eliminate → learn → plan → evaluate → experiment → design → performance improve
 """
 
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Union
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import numpy as np
@@ -14,6 +14,7 @@ from .hyperparameter_tuner import HyperparameterTuner, HyperparameterConfig, Epi
 from .confidence_evaluator import ConfidenceEvaluator, ImprovementEvidence
 from .perceptron_units import PerceptronUnit
 from .bayesian_perceptron_assigner import BayesianPerceptronAssigner
+from .feature_extractor import GridSquareFeatures
 from ..database import Database, Perceptron
 
 
@@ -63,8 +64,9 @@ class LearningPipeline:
     
     def run_episode(
         self,
-        training_data: List[Tuple[np.ndarray, int]],
-        validation_data: Optional[List[Tuple[np.ndarray, int]]] = None
+        training_data: List[Union[Tuple[np.ndarray, int], Tuple[np.ndarray, int, GridSquareFeatures]]],
+        validation_data: Optional[List[Union[Tuple[np.ndarray, int], Tuple[np.ndarray, int, GridSquareFeatures]]]] = None,
+        perceptrons: Optional[Dict[str, PerceptronUnit]] = None
     ) -> Dict[str, Any]:
         """
         Run a complete learning episode.
@@ -76,6 +78,10 @@ class LearningPipeline:
         Returns:
             Dictionary with episode results
         """
+        # Allow callers (e.g., PuzzleDetector) to provide the current in-memory perceptrons.
+        if perceptrons is not None:
+            self.state.perceptrons = dict(perceptrons)
+
         self.state.episode_id += 1
         episode_id = self.state.episode_id
         
@@ -171,6 +177,17 @@ class LearningPipeline:
         }
         
         return results
+
+    def _unpack_example(
+        self,
+        example: Union[Tuple[np.ndarray, int], Tuple[np.ndarray, int, GridSquareFeatures]]
+    ) -> Tuple[np.ndarray, int, Optional[GridSquareFeatures]]:
+        """Unpack a training example with optional GridSquareFeatures."""
+        if len(example) == 2:
+            features, target = example
+            return features, int(target), None
+        features, target, grid_features = example
+        return features, int(target), grid_features
     
     def _step_assign(self, episode_id: int) -> HyperparameterConfig:
         """Step 1: Assign hyperparameters for episode."""
@@ -180,7 +197,7 @@ class LearningPipeline:
     
     def _step_iterate(
         self,
-        training_data: List[Tuple[np.ndarray, int]],
+        training_data: List[Union[Tuple[np.ndarray, int], Tuple[np.ndarray, int, GridSquareFeatures]]],
         config: HyperparameterConfig
     ) -> Dict[str, Any]:
         """Step 2: Run multiple iterations with static parameters."""
@@ -197,22 +214,44 @@ class LearningPipeline:
         # Train for specified iterations
         total_correct = 0
         total_samples = 0
+        assignments_used = 0
         
         for iteration in range(config.iterations):
-            for features, target in training_data[:config.batch_size * 10]:  # Limit samples per iteration
-                # Assign to a perceptron (simplified - would use Bayesian assigner)
+            for example in training_data[: config.batch_size * 10]:  # Limit samples per iteration
+                features, target, grid_features = self._unpack_example(example)
+
+                # Assign to a perceptron (Bayesian when grid features are available)
                 perceptron = list(self.state.perceptrons.values())[0]
+                assignment = None
+                if grid_features is not None:
+                    assignment = self.bayesian_assigner.assign_perceptron(
+                        grid_features=grid_features,
+                        available_perceptrons=self.state.perceptrons
+                    )
+                    if assignment.perceptron_id and assignment.perceptron_id in self.state.perceptrons:
+                        perceptron = self.state.perceptrons[assignment.perceptron_id]
+                    assignments_used += 1
+
                 perceptron.update_learning_rate(config.learning_rate)
                 
                 is_correct = perceptron.train(features, target)
                 if is_correct:
                     total_correct += 1
                 total_samples += 1
+
+                # Feed results back to Bayesian assigner so it can update priors.
+                if assignment is not None:
+                    self.bayesian_assigner.update_from_results(
+                        assignment=assignment,
+                        was_correct=is_correct,
+                        perceptron_confidence=float(perceptron.confidence)
+                    )
         
         return {
             'iterations': config.iterations,
             'accuracy': total_correct / max(1, total_samples),
-            'samples_processed': total_samples
+            'samples_processed': total_samples,
+            'assignments_used': assignments_used
         }
     
     def _step_evaluate(self) -> Dict[str, Any]:
@@ -237,7 +276,7 @@ class LearningPipeline:
     
     def _step_test(
         self,
-        validation_data: List[Tuple[np.ndarray, int]]
+        validation_data: List[Union[Tuple[np.ndarray, int], Tuple[np.ndarray, int, GridSquareFeatures]]]
     ) -> Dict[str, Any]:
         """Step 4: Test perceptrons on validation data."""
         if not self.state.perceptrons or not validation_data:
@@ -246,8 +285,13 @@ class LearningPipeline:
         total_correct = 0
         total_samples = len(validation_data)
         
-        for features, target in validation_data:
-            perceptron = list(self.state.perceptrons.values())[0]  # Simplified
+        for example in validation_data:
+            features, target, grid_features = self._unpack_example(example)
+            perceptron = list(self.state.perceptrons.values())[0]
+            if grid_features is not None:
+                assignment = self.bayesian_assigner.assign_perceptron(grid_features, self.state.perceptrons)
+                if assignment.perceptron_id and assignment.perceptron_id in self.state.perceptrons:
+                    perceptron = self.state.perceptrons[assignment.perceptron_id]
             prediction, _ = perceptron.predict(features)
             predicted_value = 1 if prediction else 0
             
@@ -296,7 +340,7 @@ class LearningPipeline:
     
     def _step_learn(
         self,
-        training_data: List[Tuple[np.ndarray, int]]
+        training_data: List[Union[Tuple[np.ndarray, int], Tuple[np.ndarray, int, GridSquareFeatures]]]
     ) -> Dict[str, Any]:
         """Step 7: Update perceptron weights and Bayesian priors."""
         if not self.state.perceptrons or not training_data:
@@ -304,10 +348,22 @@ class LearningPipeline:
         
         # Continue training
         total_updates = 0
-        for features, target in training_data[:100]:  # Limit for performance
+        for example in training_data[:100]:  # Limit for performance
+            features, target, grid_features = self._unpack_example(example)
             perceptron = list(self.state.perceptrons.values())[0]
-            perceptron.train(features, target)
+            assignment = None
+            if grid_features is not None:
+                assignment = self.bayesian_assigner.assign_perceptron(grid_features, self.state.perceptrons)
+                if assignment.perceptron_id and assignment.perceptron_id in self.state.perceptrons:
+                    perceptron = self.state.perceptrons[assignment.perceptron_id]
+            is_correct = perceptron.train(features, target)
             total_updates += 1
+            if assignment is not None:
+                self.bayesian_assigner.update_from_results(
+                    assignment=assignment,
+                    was_correct=is_correct,
+                    perceptron_confidence=float(perceptron.confidence)
+                )
         
         return {
             'updates_performed': total_updates,
@@ -319,7 +375,7 @@ class LearningPipeline:
         if not self.state.perceptrons:
             return {'count': 0}
         
-        # Select high-confidence perceptrons using Bayesian assigner
+        # Select high-confidence perceptrons using Bayesian assigner (posterior over quality bins).
         selected = self.bayesian_assigner.select_high_confidence_perceptrons(
             self.state.perceptrons,
             threshold=0.8
@@ -329,18 +385,26 @@ class LearningPipeline:
         for perceptron_id, perceptron in selected:
             state = perceptron.get_state()
             
-            # Save to database
-            self.database.create_perceptron(
-                weights=state.weights.tolist(),
-                learning_rate=state.learning_rate,
-                confidence=state.confidence,
-                accuracy=state.accuracy,
-                perceptron_id=perceptron_id,
-                metadata={
-                    'training_count': state.training_count,
-                    'created': state.created
-                }
-            )
+            # If this perceptron already exists, update performance; else create.
+            existing = self.database.get_perceptron(perceptron_id)
+            if existing is None:
+                self.database.create_perceptron(
+                    weights=state.weights.tolist(),
+                    learning_rate=state.learning_rate,
+                    confidence=state.confidence,
+                    accuracy=state.accuracy,
+                    perceptron_id=perceptron_id,
+                    metadata={
+                        'training_count': state.training_count,
+                        'created': state.created
+                    }
+                )
+            else:
+                self.database.update_perceptron_performance(
+                    perceptron_id=perceptron_id,
+                    accuracy=state.accuracy,
+                    confidence=state.confidence
+                )
             saved_count += 1
         
         return {'count': saved_count, 'perceptrons': [pid for pid, _ in selected]}
@@ -375,12 +439,28 @@ class LearningPipeline:
     
     def _step_learn_continue(self) -> Dict[str, Any]:
         """Step 11: Continue learning from remaining high-quality perceptrons."""
-        # Load high-confidence perceptrons from database
+        # Load high-confidence perceptrons from database and ensure they exist in memory.
         high_conf_perceptrons = self.database.get_high_confidence_perceptrons(threshold=0.8)
+
+        loaded = 0
+        for p in high_conf_perceptrons:
+            if p.perceptron_id in self.state.perceptrons:
+                continue
+            unit = PerceptronUnit(
+                input_size=len(p.weights),
+                learning_rate=p.learning_rate,
+                initial_weights=np.array(p.weights, dtype=float),
+                initial_bias=0.0
+            )
+            unit.accuracy = float(p.accuracy)
+            unit.confidence = float(p.confidence)
+            self.state.perceptrons[p.perceptron_id] = unit
+            loaded += 1
         
         return {
             'high_confidence_perceptrons_available': len(high_conf_perceptrons),
-            'in_memory_perceptrons': len(self.state.perceptrons)
+            'loaded_into_memory': loaded,
+            'in_memory_perceptrons': len(self.state.perceptrons),
         }
     
     def _step_plan(self) -> Dict[str, Any]:

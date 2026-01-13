@@ -95,6 +95,9 @@ class HyperparameterTuner:
         self.confidence_threshold_high = 0.8
         self.confidence_threshold_medium = 0.5
         self.confidence_threshold_low = 0.3
+        
+        # Breadcrumb tracking for learning insights
+        self.learning_breadcrumbs: List[Dict[str, Any]] = []
     
     def assign_hyperparameters(self, episode_id: Optional[int] = None) -> HyperparameterConfig:
         """
@@ -237,3 +240,28 @@ class HyperparameterTuner:
             batch_size=1,
             iterations=100
         )
+    
+    def add_learning_breadcrumb(self, breadcrumb: Dict[str, Any]):
+        """
+        Add a learning breadcrumb from agents.
+        
+        Args:
+            breadcrumb: Dictionary containing breadcrumb data with keys:
+                - timestamp: ISO timestamp
+                - event_type: Type of event
+                - data: Event-specific data
+                - source: Source of the breadcrumb
+        """
+        self.learning_breadcrumbs.append(breadcrumb)
+        
+        # Keep only last 1000 breadcrumbs
+        if len(self.learning_breadcrumbs) > 1000:
+            self.learning_breadcrumbs = self.learning_breadcrumbs[-1000:]
+    
+    def get_learning_breadcrumbs(self) -> List[Dict[str, Any]]:
+        """Get all learning breadcrumbs."""
+        return self.learning_breadcrumbs.copy()
+    
+    def get_breadcrumbs_by_type(self, event_type: str) -> List[Dict[str, Any]]:
+        """Get breadcrumbs filtered by event type."""
+        return [bc for bc in self.learning_breadcrumbs if bc.get("event_type") == event_type]

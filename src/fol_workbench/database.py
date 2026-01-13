@@ -245,6 +245,10 @@ class Database:
         self.tasks: Dict[str, Task] = {}
         self.schedule_events: Dict[str, ScheduleEvent] = {}
         self.perceptrons: Dict[str, Perceptron] = {}
+        
+        # Breadcrumb tracking for learning insights
+        self.learning_breadcrumbs: List[Dict[str, Any]] = []
+        
         self._load()
     
     def _load(self):
@@ -467,3 +471,70 @@ class Database:
             if self.delete_perceptron(perceptron.perceptron_id):
                 count += 1
         return count
+
+    def list_perceptrons_sorted(
+        self,
+        descending: bool = True
+    ) -> List[Perceptron]:
+        """
+        Return all perceptrons sorted by a combined quality score.
+
+        Score heuristic: average of confidence and accuracy.
+        """
+        def score(p: Perceptron) -> float:
+            return (float(p.confidence) + float(p.accuracy)) / 2.0
+
+        return sorted(self.perceptrons.values(), key=score, reverse=descending)
+
+    def get_top_perceptrons(self, k: int = 3) -> List[Perceptron]:
+        """Return the top-k perceptrons by combined quality score."""
+        if k <= 0:
+            return []
+        return self.list_perceptrons_sorted(descending=True)[:k]
+
+    def get_worst_perceptron(self) -> Optional[Perceptron]:
+        """Return the single worst perceptron by combined quality score."""
+        perceptrons = self.list_perceptrons_sorted(descending=False)
+        return perceptrons[0] if perceptrons else None
+
+    def delete_worst_perceptron(self) -> Optional[str]:
+        """
+        Delete the worst perceptron by combined quality score.
+
+        Returns:
+            The deleted perceptron_id if one was deleted, else None.
+        """
+        worst = self.get_worst_perceptron()
+        if not worst:
+            return None
+        if self.delete_perceptron(worst.perceptron_id):
+            return worst.perceptron_id
+        return None
+    
+    def add_learning_breadcrumb(self, breadcrumb: Dict[str, Any]):
+        """
+        Add a learning breadcrumb from agents.
+        
+        Args:
+            breadcrumb: Dictionary containing breadcrumb data with keys:
+                - timestamp: ISO timestamp
+                - event_type: Type of event
+                - data: Event-specific data
+                - source: Source of the breadcrumb
+        """
+        self.learning_breadcrumbs.append(breadcrumb)
+        
+        # Keep only last 1000 breadcrumbs
+        if len(self.learning_breadcrumbs) > 1000:
+            self.learning_breadcrumbs = self.learning_breadcrumbs[-1000:]
+        
+        # Also save to file
+        self._save()
+    
+    def get_learning_breadcrumbs(self) -> List[Dict[str, Any]]:
+        """Get all learning breadcrumbs."""
+        return self.learning_breadcrumbs.copy()
+    
+    def get_breadcrumbs_by_type(self, event_type: str) -> List[Dict[str, Any]]:
+        """Get breadcrumbs filtered by event type."""
+        return [bc for bc in self.learning_breadcrumbs if bc.get("event_type") == event_type]

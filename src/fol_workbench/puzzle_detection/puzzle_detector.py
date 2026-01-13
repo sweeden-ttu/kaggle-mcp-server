@@ -197,13 +197,15 @@ class PuzzleDetector:
         Returns:
             Training results
         """
-        training_data = []
+        # Provide both the feature vector and the original GridSquareFeatures so the
+        # Bayesian assignment model can learn better square→perceptron routing.
+        training_data: List[Tuple[np.ndarray, int, GridSquareFeatures]] = []
         for features, target in examples:
             feature_vector = self._features_to_vector(features)
-            training_data.append((feature_vector, target))
+            training_data.append((feature_vector, target, features))
         
         # Run learning pipeline episode
-        results = self.learning_pipeline.run_episode(training_data)
+        results = self.learning_pipeline.run_episode(training_data, perceptrons=self.perceptrons)
         
         # Update in-memory perceptrons from pipeline state
         self.perceptrons.update(self.learning_pipeline.state.perceptrons)
@@ -225,7 +227,7 @@ class PuzzleDetector:
         Returns:
             Episode results
         """
-        return self.learning_pipeline.run_episode(training_data, validation_data)
+        return self.learning_pipeline.run_episode(training_data, validation_data, perceptrons=self.perceptrons)
     
     def _features_to_vector(self, features: GridSquareFeatures) -> np.ndarray:
         """
