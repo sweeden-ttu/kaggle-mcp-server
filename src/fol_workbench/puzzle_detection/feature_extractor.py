@@ -90,6 +90,9 @@ class FeatureExtractor:
             r'select|choose|click|identify',  # Action questions
             r'which|all|none',  # Selection questions
         ]
+        
+        # Breadcrumb tracking for learning insights
+        self.learning_breadcrumbs: List[Dict[str, Any]] = []
     
     def extract_features(self, grid_square: GridSquare) -> GridSquareFeatures:
         """

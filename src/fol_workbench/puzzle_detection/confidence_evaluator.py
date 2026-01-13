@@ -77,6 +77,9 @@ class ConfidenceEvaluator:
         # Performance history
         self.performance_history: deque = deque(maxlen=1000)
         self.baseline_metrics: Optional[Tuple[float, float]] = None  # (accuracy, confidence)
+        
+        # Breadcrumb tracking for learning insights
+        self.learning_breadcrumbs: List[Dict[str, Any]] = []
     
     def record_performance(
         self,

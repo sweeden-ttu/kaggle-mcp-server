@@ -95,6 +95,9 @@ class HyperparameterTuner:
         self.confidence_threshold_high = 0.8
         self.confidence_threshold_medium = 0.5
         self.confidence_threshold_low = 0.3
+        
+        # Breadcrumb tracking for learning insights
+        self.learning_breadcrumbs: List[Dict[str, Any]] = []
     
     def assign_hyperparameters(self, episode_id: Optional[int] = None) -> HyperparameterConfig:
         """

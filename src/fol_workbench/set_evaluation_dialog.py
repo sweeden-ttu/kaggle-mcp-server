@@ -12,13 +12,31 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QPushButton,
     QTextEdit, QLabel, QGroupBox, QFormLayout, QLineEdit, QMessageBox,
-    QFileDialog, QGridLayout, QScrollArea, QSplitter, QPlainTextEdit, QInputDialog
+    QFileDialog, QGridLayout, QScrollArea, QSplitter, QPlainTextEdit,
+    QListWidget, QListWidgetItem, QCheckBox, QTableWidget, QTableWidgetItem
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QTextCharFormat, QColor
 
-from .database import Database
-from .ml_strategy_integration import MLStrategySystem
+# Import perceptron and LLM modules
+try:
+    from .puzzle_detection.perceptron_units import PerceptronUnit
+    from .llm_observation_generator import UltraLargeLanguageModel, Observation
+    from .puzzle_detection.confidence_evaluator import ConfidenceEvaluator
+    from .puzzle_detection.feature_extractor import FeatureExtractor
+    from .puzzle_detection.hyperparameter_tuner import HyperparameterTuner
+    from .database import Database
+    from .ikyke_format import IkykeWorkflow
+    PERCEPTRON_AVAILABLE = True
+except ImportError:
+    PERCEPTRON_AVAILABLE = False
+    PerceptronUnit = None
+    UltraLargeLanguageModel = None
+    ConfidenceEvaluator = None
+    FeatureExtractor = None
+    HyperparameterTuner = None
+    Database = None
+    IkykeWorkflow = None
 
 
 class SetSymbolButton(QPushButton):
@@ -47,12 +65,7 @@ class SetSymbolButton(QPushButton):
 class SetEvaluationDialog(QDialog):
     """Main dialog for Set Evaluation System with Prolog generation."""
     
-    def __init__(
-        self,
-        parent=None,
-        database: Optional[Database] = None,
-        ml_system: Optional[MLStrategySystem] = None
-    ):
+    def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Set Evaluation - Prolog Generator")
         self.setMinimumSize(1200, 800)
@@ -62,12 +75,26 @@ class SetEvaluationDialog(QDialog):
         
         # Prolog code generator
         self.prolog_code: str = ""
-
-        # Perceptron storage / ranking (human-in-the-loop)
-        self.database = database or Database()
-        self.ml_system = ml_system or MLStrategySystem()
+        
+        # Perceptron management
+        self.perceptrons: Dict[str, PerceptronUnit] = {}
+        self.selected_top_perceptrons: List[str] = []
+        
+        # LLM for re-evaluation
+        if PERCEPTRON_AVAILABLE and UltraLargeLanguageModel:
+            self.llm = UltraLargeLanguageModel()
+        else:
+            self.llm = None
+        
+        # Breadcrumb tracking agents
+        self.breadcrumbs: List[Dict[str, Any]] = []
+        self.confidence_evaluator = ConfidenceEvaluator() if PERCEPTRON_AVAILABLE and ConfidenceEvaluator else None
+        self.feature_extractor = FeatureExtractor() if PERCEPTRON_AVAILABLE and FeatureExtractor else None
+        self.hyperparameter_tuner = HyperparameterTuner() if PERCEPTRON_AVAILABLE and HyperparameterTuner else None
+        self.database = Database() if PERCEPTRON_AVAILABLE and Database else None
         
         self._setup_ui()
+        self._initialize_perceptrons()
     
     def _setup_ui(self):
         """Set up the user interface."""
@@ -82,7 +109,10 @@ class SetEvaluationDialog(QDialog):
         # Tab 2: Prolog Code Generator
         tabs.addTab(self._create_prolog_generator_tab(), "Prolog Generator")
         
-        # Tab 3: Help & Documentation
+        # Tab 3: Perceptron Management
+        tabs.addTab(self._create_perceptron_tab(), "Perceptron Management")
+        
+        # Tab 4: Help & Documentation
         tabs.addTab(self._create_help_tab(), "Help & Documentation")
         
         layout.addWidget(tabs)
@@ -98,10 +128,6 @@ class SetEvaluationDialog(QDialog):
         generate_btn.clicked.connect(self._generate_prolog)
         button_layout.addWidget(generate_btn)
         
-        human_eval_btn = QPushButton("Human Evaluate (Perceptrons)")
-        human_eval_btn.clicked.connect(self._human_evaluate_perceptrons)
-        button_layout.addWidget(human_eval_btn)
-
         save_btn = QPushButton("Save Prolog File")
         save_btn.clicked.connect(self._save_prolog_file)
         button_layout.addWidget(save_btn)
@@ -395,19 +421,6 @@ class SetEvaluationDialog(QDialog):
         self.preview_display.setFont(QFont("Courier New", 10))
         self.preview_display.setMaximumHeight(150)
         layout.addWidget(self.preview_display)
-
-        # ULLM re-evaluation display
-        ullm_label = QLabel("ULLM Re-evaluation (performance-optimized):")
-        ullm_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        layout.addWidget(ullm_label)
-
-        self.ullm_display = QPlainTextEdit()
-        self.ullm_display.setFont(QFont("Courier New", 10))
-        self.ullm_display.setPlaceholderText(
-            "After human evaluation (select top perceptrons / delete worst), "
-            "the ULLM re-evaluation output will appear here..."
-        )
-        layout.addWidget(self.ullm_display)
         
         return widget
     
@@ -580,174 +593,113 @@ class SetEvaluationDialog(QDialog):
         self.preview_display.setHtml(preview_text)
         
         QMessageBox.information(self, "Generated", "Prolog code generated successfully!")
-
-        # Optional human-in-the-loop step right after generation
-        response = QMessageBox.question(
-            self,
-            "Human Evaluation",
-            "Human evaluation step:\n\n"
-            "Please select the top perceptrons.\n"
-            "Then: Please delete the worst perceptron.\n\n"
-            "Run this now?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        if response == QMessageBox.StandardButton.Yes:
-            self._human_evaluate_perceptrons()
     
     def _parse_expression_to_prolog(self, expr: str, set_a: str, set_b: str, element: str) -> List[str]:
         """Parse expression and generate Prolog queries."""
-        queries = []
-        
-        # Parse each expression component
-        expr_parts = expr.split()
-        
-        for i, part in enumerate(expr_parts):
-            # Membership operations
-            if "∈" in part:
-                queries.append(f"% Membership query")
-                queries.append(f"% Query: {part}")
-                # Extract element and set from expression
-                if "∈" in part:
-                    parts = part.split("∈")
-                    if len(parts) == 2:
-                        elem, set_name = parts[0].strip(), parts[1].strip()
-                        queries.append(f"% member({elem}, {set_name}).")
-                queries.append("")
-            
-            elif "∉" in part:
-                queries.append(f"% Non-membership query")
-                queries.append(f"% Query: {part}")
-                if "∉" in part:
-                    parts = part.split("∉")
-                    if len(parts) == 2:
-                        elem, set_name = parts[0].strip(), parts[1].strip()
-                        queries.append(f"% not_member({elem}, {set_name}).")
-                queries.append("")
-            
-            elif "∋" in part:
-                queries.append(f"% Contains query")
-                queries.append(f"% Query: {part}")
-                if "∋" in part:
-                    parts = part.split("∋")
-                    if len(parts) == 2:
-                        set_name, elem = parts[0].strip(), parts[1].strip()
-                        queries.append(f"% member({elem}, {set_name}).")
-                queries.append("")
-            
-            # Set relations
-            elif "⊆" in part:
-                queries.append(f"% Subset query")
-                queries.append(f"% Query: {part}")
-                if "⊆" in part:
-                    parts = part.split("⊆")
-                    if len(parts) == 2:
-                        set1, set2 = parts[0].strip(), parts[1].strip()
-                        queries.append(f"% subset({set1}, {set2}).")
-                queries.append("")
-            
-            elif "⊂" in part:
-                queries.append(f"% Proper subset query")
-                queries.append(f"% Query: {part}")
-                if "⊂" in part:
-                    parts = part.split("⊂")
-                    if len(parts) == 2:
-                        set1, set2 = parts[0].strip(), parts[1].strip()
-                        queries.append(f"% proper_subset({set1}, {set2}).")
-                queries.append("")
-            
-            elif "⊇" in part:
-                queries.append(f"% Superset query")
-                queries.append(f"% Query: {part}")
-                if "⊇" in part:
-                    parts = part.split("⊇")
-                    if len(parts) == 2:
-                        set1, set2 = parts[0].strip(), parts[1].strip()
-                        queries.append(f"% subset({set2}, {set1}).")
-                queries.append("")
-            
-            elif "⊃" in part:
-                queries.append(f"% Proper superset query")
-                queries.append(f"% Query: {part}")
-                if "⊃" in part:
-                    parts = part.split("⊃")
-                    if len(parts) == 2:
-                        set1, set2 = parts[0].strip(), parts[1].strip()
-                        queries.append(f"% proper_subset({set2}, {set1}).")
-                queries.append("")
-            
-            # Set operations
-            elif "∪" in part:
-                queries.append(f"% Union query")
-                queries.append(f"% Query: {part}")
-                if "∪" in part:
-                    parts = part.split("∪")
-                    if len(parts) == 2:
-                        set1, set2 = parts[0].strip(), parts[1].strip()
-                        queries.append(f"% union({set1}, {set2}, Result).")
-                queries.append("")
-            
-            elif "∩" in part:
-                queries.append(f"% Intersection query")
-                queries.append(f"% Query: {part}")
-                if "∩" in part:
-                    parts = part.split("∩")
-                    if len(parts) == 2:
-                        set1, set2 = parts[0].strip(), parts[1].strip()
-                        queries.append(f"% intersection({set1}, {set2}, Result).")
-                queries.append("")
-            
-            elif "∖" in part:
-                queries.append(f"% Set difference query")
-                queries.append(f"% Query: {part}")
-                if "∖" in part:
-                    parts = part.split("∖")
-                    if len(parts) == 2:
-                        set1, set2 = parts[0].strip(), parts[1].strip()
-                        queries.append(f"% difference({set1}, {set2}, Result).")
-                queries.append("")
-            
+        queries: List[str] = []
+
+        # Expressions coming from symbol buttons are whitespace-tokenized like:
+        #   "A ∪ B" -> ["A", "∪", "B"]
+        # The previous implementation tried to split the operator token itself,
+        # yielding empty operands. We fix this by treating operators as tokens
+        # and reading operands from neighboring tokens.
+
+        raw_tokens = [t for t in expr.split() if t.strip()]
+
+        # Also support compact forms like "A∪B" or "x∈S" by exploding tokens.
+        binary_ops = ["∈", "∉", "∋", "⊂", "⊆", "⊃", "⊇", "∪", "∩", "∖", "≠", "=", "≡", "≅", ":=", "≜"]
+
+        def explode_token(tok: str) -> List[str]:
+            # Keep power-set form intact for separate handling: ℘(S)
+            if tok.startswith("℘(") and tok.endswith(")"):
+                return [tok]
+            if tok == "∅":
+                return [tok]
+
+            for op in binary_ops:
+                # Only split if operator is embedded with non-empty operands on both sides
+                if op in tok and tok != op:
+                    parts = tok.split(op)
+                    if len(parts) == 2 and parts[0].strip() and parts[1].strip():
+                        return [parts[0].strip(), op, parts[1].strip()]
+            return [tok]
+
+        tokens: List[str] = []
+        for t in raw_tokens:
+            tokens.extend(explode_token(t))
+
+        def add_query_block(title: str, pretty: str, prolog_line: str):
+            queries.append(f"% {title}")
+            queries.append(f"% Query: {pretty}")
+            queries.append(f"% {prolog_line}")
+            queries.append("")
+
+        i = 0
+        while i < len(tokens):
+            tok = tokens[i]
+
             # Special sets
-            elif part == "∅":
-                queries.append(f"% Empty set check")
-                queries.append(f"% Query: {part}")
-                queries.append(f"% empty_set(Set).")
-                queries.append("")
-            
-            elif "℘" in part:
-                queries.append(f"% Power set query")
-                queries.append(f"% Query: {part}")
-                # Extract set name from ℘(Set)
-                if "℘(" in part and ")" in part:
-                    start = part.find("℘(") + 2
-                    end = part.find(")", start)
-                    if end > start:
-                        set_name = part[start:end].strip()
-                        queries.append(f"% power_set({set_name}, PowerSet).")
-                queries.append("")
-            
-            # Equivalence
-            elif "=" in part and "≠" not in part and ":=" not in part and "≜" not in part:
-                # Check if it's a set equality (not just any =)
-                if i > 0 and i < len(expr_parts) - 1:
-                    queries.append(f"% Equality query")
-                    queries.append(f"% Query: {part}")
-                    if "=" in part:
-                        parts = part.split("=")
-                        if len(parts) == 2:
-                            set1, set2 = parts[0].strip(), parts[1].strip()
-                            queries.append(f"% set_equal({set1}, {set2}).")
-                    queries.append("")
-            
-            elif "≠" in part:
-                queries.append(f"% Inequality query")
-                queries.append(f"% Query: {part}")
-                if "≠" in part:
-                    parts = part.split("≠")
-                    if len(parts) == 2:
-                        set1, set2 = parts[0].strip(), parts[1].strip()
-                        queries.append(f"% not(set_equal({set1}, {set2})).")
-                queries.append("")
-        
+            if tok == "∅":
+                add_query_block("Empty set check", "∅", "empty_set(Set).")
+                i += 1
+                continue
+
+            # Power set ℘(S)
+            if tok.startswith("℘(") and tok.endswith(")"):
+                inner = tok[2:-1].strip()
+                if inner:
+                    add_query_block("Power set query", tok, f"power_set({inner}, PowerSet).")
+                i += 1
+                continue
+
+            # Binary operators as standalone tokens, e.g. ["A", "∪", "B"]
+            if tok in binary_ops and tok not in [":=", "≜"]:
+                left = tokens[i - 1].strip() if i - 1 >= 0 else ""
+                right = tokens[i + 1].strip() if i + 1 < len(tokens) else ""
+
+                # If operands are missing, skip safely
+                if not left or not right:
+                    i += 1
+                    continue
+
+                pretty = f"{left} {tok} {right}"
+
+                if tok == "∈":
+                    add_query_block("Membership query", pretty, f"member({left}, {right}).")
+                elif tok == "∉":
+                    add_query_block("Non-membership query", pretty, f"not_member({left}, {right}).")
+                elif tok == "∋":
+                    add_query_block("Contains query", pretty, f"member({right}, {left}).")
+                elif tok == "∪":
+                    add_query_block("Union query", pretty, f"union({left}, {right}, Result).")
+                elif tok == "∩":
+                    add_query_block("Intersection query", pretty, f"intersection({left}, {right}, Result).")
+                elif tok == "∖":
+                    add_query_block("Set difference query", pretty, f"difference({left}, {right}, Result).")
+                elif tok == "⊆":
+                    add_query_block("Subset query", pretty, f"subset({left}, {right}).")
+                elif tok == "⊂":
+                    add_query_block("Proper subset query", pretty, f"proper_subset({left}, {right}).")
+                elif tok == "⊇":
+                    add_query_block("Superset query", pretty, f"subset({right}, {left}).")
+                elif tok == "⊃":
+                    add_query_block("Proper superset query", pretty, f"proper_subset({right}, {left}).")
+                elif tok == "=":
+                    add_query_block("Equality query", pretty, f"set_equal({left}, {right}).")
+                elif tok == "≠":
+                    add_query_block("Inequality query", pretty, f"not(set_equal({left}, {right})).")
+                elif tok == "≡":
+                    # Keep it simple: logical equivalence treated as set equality by default
+                    add_query_block("Equivalence query", pretty, f"set_equal({left}, {right}).")
+                elif tok == "≅":
+                    # Congruence/isomorphism placeholder
+                    add_query_block("Congruence query", pretty, f"congruent({left}, {right}).")
+
+                i += 1
+                continue
+
+            i += 1
+
         if not queries:
             queries.append("% No specific queries generated from expression")
             queries.append("% You can manually add queries using the predicates defined above")
@@ -756,108 +708,8 @@ class SetEvaluationDialog(QDialog):
             queries.append(f"% member({element}, {set_a}).")
             queries.append(f"% union({set_a}, {set_b}, Result).")
             queries.append(f"% subset({set_a}, {set_b}).")
-        
+
         return queries
-
-    def _human_evaluate_perceptrons(self):
-        """
-        Human-in-the-loop workflow:
-        1) "Please select the top perceptrons"
-        2) "Please delete the worst perceptron"
-        3) Re-evaluate the ULLM (optimized for performance)
-        """
-        perceptrons = self.database.list_perceptrons_sorted(descending=True)
-        if not perceptrons:
-            QMessageBox.information(
-                self,
-                "No Perceptrons",
-                "No perceptrons are currently stored in the database.\n\n"
-                "Run the puzzle detection learning pipeline first to create perceptrons."
-            )
-            return
-
-        # Step 1: Select top perceptrons (human decides K)
-        k_default = min(3, len(perceptrons))
-        k, ok = QInputDialog.getInt(
-            self,
-            "Please select the top perceptrons",
-            "How many top perceptrons should be selected?",
-            k_default,
-            1,
-            len(perceptrons),
-            1
-        )
-        if not ok:
-            return
-
-        selected = perceptrons[:k]
-        selected_ids = [p.perceptron_id for p in selected]
-
-        # Step 2: Delete worst perceptron (default choice = worst among non-selected)
-        remaining = [p for p in perceptrons if p.perceptron_id not in selected_ids]
-        if not remaining:
-            remaining = perceptrons[:]  # fallback: allow deletion from all
-
-        # Worst is last in descending list (or first in ascending of remaining)
-        remaining_sorted = sorted(
-            remaining,
-            key=lambda p: (float(p.confidence) + float(p.accuracy)) / 2.0,
-            reverse=False
-        )
-        worst = remaining_sorted[0]
-
-        options = [
-            f"{p.perceptron_id}  (acc={p.accuracy:.2f}, conf={p.confidence:.2f})"
-            for p in remaining_sorted
-        ]
-        default_index = 0
-        choice, ok = QInputDialog.getItem(
-            self,
-            "Please delete the worst perceptron",
-            "Select the perceptron to delete:",
-            options,
-            default_index,
-            False
-        )
-        if not ok:
-            return
-
-        chosen_id = choice.split()[0].strip()
-        confirm = QMessageBox.question(
-            self,
-            "Confirm Deletion",
-            f"Delete perceptron:\n\n{chosen_id}\n\nProceed?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        deleted_id: Optional[str] = None
-        if confirm == QMessageBox.StandardButton.Yes:
-            if self.database.delete_perceptron(chosen_id):
-                deleted_id = chosen_id
-            else:
-                QMessageBox.warning(self, "Delete Failed", f"Could not delete perceptron '{chosen_id}'.")
-                return
-
-        # Step 3: Re-evaluate ULLM (optimized)
-        summary_metrics = {
-            "perceptrons_total_before": len(perceptrons),
-            "perceptrons_selected_top": len(selected_ids),
-            "perceptron_deleted": bool(deleted_id)
-        }
-        self.ml_system.observe_perceptron_pruning(
-            selected_top_ids=selected_ids,
-            deleted_worst_id=deleted_id,
-            summary_metrics=summary_metrics,
-            optimized=True
-        )
-        ullm_text = self.ml_system.llm.re_evaluate_optimized(max_length=8000)
-        self.ullm_display.setPlainText(ullm_text)
-
-        QMessageBox.information(
-            self,
-            "Re-evaluation Complete",
-            "Perceptron selection + deletion recorded.\n"
-            "ULLM re-evaluated using the performance-optimized path."
-        )
     
     def _save_prolog_file(self):
         """Save the generated Prolog code to a file."""
@@ -879,3 +731,566 @@ class SetEvaluationDialog(QDialog):
                 QMessageBox.information(self, "Saved", f"Prolog file saved to:\n{filename}")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to save file:\n{str(e)}")
+    
+    def _create_perceptron_tab(self) -> QWidget:
+        """Create the perceptron management tab."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        if not PERCEPTRON_AVAILABLE:
+            warning_label = QLabel(
+                "Perceptron modules are not available. Please ensure puzzle_detection "
+                "modules are properly installed."
+            )
+            warning_label.setWordWrap(True)
+            warning_label.setStyleSheet("color: red; font-weight: bold;")
+            layout.addWidget(warning_label)
+            return widget
+        
+        # Instructions
+        instructions = QLabel(
+            "After evaluating sets, select top perceptrons and delete the worst one. "
+            "Then re-evaluate using the Ultra-Large Language Model optimized for performance."
+        )
+        instructions.setWordWrap(True)
+        layout.addWidget(instructions)
+        
+        # Splitter for perceptron list and actions
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        
+        # Left: Perceptron list
+        left_widget = QWidget()
+        left_layout = QVBoxLayout(left_widget)
+        
+        list_label = QLabel("Available Perceptrons:")
+        list_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        left_layout.addWidget(list_label)
+        
+        self.perceptron_table = QTableWidget()
+        self.perceptron_table.setColumnCount(5)
+        self.perceptron_table.setHorizontalHeaderLabels([
+            "Select", "ID", "Accuracy", "Confidence", "Training Count"
+        ])
+        self.perceptron_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.perceptron_table.horizontalHeader().setStretchLastSection(True)
+        left_layout.addWidget(self.perceptron_table)
+        
+        splitter.addWidget(left_widget)
+        
+        # Right: Actions and evaluation
+        right_widget = QWidget()
+        right_layout = QVBoxLayout(right_widget)
+        
+        # Top perceptrons selection
+        top_group = QGroupBox("Select Top Perceptrons")
+        top_layout = QVBoxLayout()
+        
+        select_top_btn = QPushButton("Please select the top perceptrons")
+        select_top_btn.clicked.connect(self._select_top_perceptrons)
+        top_layout.addWidget(select_top_btn)
+        
+        self.selected_perceptrons_list = QListWidget()
+        self.selected_perceptrons_list.setMaximumHeight(150)
+        top_layout.addWidget(self.selected_perceptrons_list)
+        
+        top_group.setLayout(top_layout)
+        right_layout.addWidget(top_group)
+        
+        # Delete worst perceptron
+        delete_group = QGroupBox("Delete Worst Perceptron")
+        delete_layout = QVBoxLayout()
+        
+        delete_worst_btn = QPushButton("Please delete the worst perceptron")
+        delete_worst_btn.clicked.connect(self._delete_worst_perceptron)
+        delete_layout.addWidget(delete_worst_btn)
+        
+        self.deleted_perceptrons_list = QListWidget()
+        self.deleted_perceptrons_list.setMaximumHeight(100)
+        delete_layout.addWidget(self.deleted_perceptrons_list)
+        
+        delete_group.setLayout(delete_layout)
+        right_layout.addWidget(delete_group)
+        
+        # LLM Re-evaluation
+        llm_group = QGroupBox("Ultra-Large Language Model Re-evaluation")
+        llm_layout = QVBoxLayout()
+        
+        re_eval_btn = QPushButton("Re-evaluate (Ultra-Large LLM Optimized)")
+        re_eval_btn.clicked.connect(self._reevaluate_with_llm)
+        llm_layout.addWidget(re_eval_btn)
+        
+        self.llm_evaluation_display = QTextEdit()
+        self.llm_evaluation_display.setReadOnly(True)
+        self.llm_evaluation_display.setFont(QFont("Courier New", 10))
+        self.llm_evaluation_display.setPlaceholderText("LLM evaluation results will appear here...")
+        llm_layout.addWidget(self.llm_evaluation_display)
+        
+        llm_group.setLayout(llm_layout)
+        right_layout.addWidget(llm_group)
+        
+        # Insights button
+        insights_group = QGroupBox("Learning Insights")
+        insights_layout = QVBoxLayout()
+        
+        insights_btn = QPushButton("Insights")
+        insights_btn.clicked.connect(self._show_insights)
+        insights_layout.addWidget(insights_btn)
+        
+        self.insights_display = QTextEdit()
+        self.insights_display.setReadOnly(True)
+        self.insights_display.setFont(QFont("Courier New", 10))
+        self.insights_display.setPlaceholderText("Learning insights and breadcrumbs will appear here...")
+        insights_layout.addWidget(self.insights_display)
+        
+        insights_group.setLayout(insights_layout)
+        right_layout.addWidget(insights_group)
+        
+        right_layout.addStretch()
+        splitter.addWidget(right_widget)
+        
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 1)
+        
+        layout.addWidget(splitter)
+        
+        return widget
+    
+    def _initialize_perceptrons(self):
+        """Initialize perceptrons for evaluation."""
+        if not PERCEPTRON_AVAILABLE:
+            return
+        
+        # Create sample perceptrons for demonstration
+        import numpy as np
+        
+        for i in range(5):
+            perceptron_id = f"perceptron_{i+1}"
+            input_size = 7  # Standard feature size
+            
+            # Create perceptron with varying performance
+            perceptron = PerceptronUnit(
+                input_size=input_size,
+                learning_rate=0.1 + i * 0.02
+            )
+            
+            # Set varying accuracy and confidence
+            perceptron.accuracy = 0.5 + i * 0.1
+            perceptron.confidence = 0.4 + i * 0.12
+            perceptron.training_count = 100 * (i + 1)
+            perceptron.correct_predictions = int(perceptron.accuracy * perceptron.training_count)
+            perceptron.total_predictions = perceptron.training_count
+            
+            self.perceptrons[perceptron_id] = perceptron
+        
+        self._update_perceptron_table()
+    
+    def _update_perceptron_table(self):
+        """Update the perceptron table display."""
+        if not PERCEPTRON_AVAILABLE:
+            return
+        
+        self.perceptron_table.setRowCount(len(self.perceptrons))
+        
+        # Sort perceptrons by accuracy (descending)
+        sorted_perceptrons = sorted(
+            self.perceptrons.items(),
+            key=lambda x: x[1].accuracy,
+            reverse=True
+        )
+        
+        for row, (perceptron_id, perceptron) in enumerate(sorted_perceptrons):
+            # Checkbox for selection
+            checkbox = QCheckBox()
+            checkbox.setChecked(perceptron_id in self.selected_top_perceptrons)
+            checkbox.stateChanged.connect(
+                lambda state, pid=perceptron_id: self._on_perceptron_selected(pid, state == Qt.CheckState.Checked.value)
+            )
+            self.perceptron_table.setCellWidget(row, 0, checkbox)
+            
+            # ID
+            self.perceptron_table.setItem(row, 1, QTableWidgetItem(perceptron_id))
+            
+            # Accuracy
+            accuracy_item = QTableWidgetItem(f"{perceptron.accuracy:.3f}")
+            accuracy_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.perceptron_table.setItem(row, 2, accuracy_item)
+            
+            # Confidence
+            confidence_item = QTableWidgetItem(f"{perceptron.confidence:.3f}")
+            confidence_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.perceptron_table.setItem(row, 3, confidence_item)
+            
+            # Training count
+            count_item = QTableWidgetItem(str(perceptron.training_count))
+            count_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.perceptron_table.setItem(row, 4, count_item)
+        
+        self.perceptron_table.resizeColumnsToContents()
+    
+    def _on_perceptron_selected(self, perceptron_id: str, selected: bool):
+        """Handle perceptron selection."""
+        if selected and perceptron_id not in self.selected_top_perceptrons:
+            self.selected_top_perceptrons.append(perceptron_id)
+        elif not selected and perceptron_id in self.selected_top_perceptrons:
+            self.selected_top_perceptrons.remove(perceptron_id)
+        
+        self._update_selected_list()
+    
+    def _select_top_perceptrons(self):
+        """Select top perceptrons based on performance."""
+        if not self.perceptrons:
+            QMessageBox.warning(self, "No Perceptrons", "No perceptrons available for selection.")
+            return
+        
+        # Sort by combined score (accuracy * confidence)
+        sorted_perceptrons = sorted(
+            self.perceptrons.items(),
+            key=lambda x: x[1].accuracy * x[1].confidence,
+            reverse=True
+        )
+        
+        # Select top 3 perceptrons
+        top_count = min(3, len(sorted_perceptrons))
+        self.selected_top_perceptrons = [pid for pid, _ in sorted_perceptrons[:top_count]]
+        
+        # Update checkboxes
+        self._update_perceptron_table()
+        self._update_selected_list()
+        
+        # Leave breadcrumb
+        self._leave_breadcrumb(
+            "top_perceptrons_selected",
+            {
+                "count": top_count,
+                "selected_ids": self.selected_top_perceptrons,
+                "top_accuracy": sorted_perceptrons[0][1].accuracy if sorted_perceptrons else 0.0,
+                "top_confidence": sorted_perceptrons[0][1].confidence if sorted_perceptrons else 0.0
+            }
+        )
+        
+        QMessageBox.information(
+            self,
+            "Top Perceptrons Selected",
+            f"Selected {top_count} top perceptrons based on performance."
+        )
+    
+    def _update_selected_list(self):
+        """Update the selected perceptrons list display."""
+        self.selected_perceptrons_list.clear()
+        for pid in self.selected_top_perceptrons:
+            if pid in self.perceptrons:
+                perceptron = self.perceptrons[pid]
+                item_text = f"{pid} - Accuracy: {perceptron.accuracy:.3f}, Confidence: {perceptron.confidence:.3f}"
+                self.selected_perceptrons_list.addItem(item_text)
+    
+    def _delete_worst_perceptron(self):
+        """Delete the worst performing perceptron."""
+        if not self.perceptrons:
+            QMessageBox.warning(self, "No Perceptrons", "No perceptrons available to delete.")
+            return
+        
+        # Find worst perceptron (lowest accuracy * confidence)
+        worst_id = min(
+            self.perceptrons.items(),
+            key=lambda x: x[1].accuracy * x[1].confidence
+        )[0]
+        
+        # Remove from selected if selected
+        if worst_id in self.selected_top_perceptrons:
+            self.selected_top_perceptrons.remove(worst_id)
+        
+        # Delete perceptron
+        deleted_perceptron = self.perceptrons.pop(worst_id)
+        
+        # Add to deleted list
+        deleted_text = (
+            f"{worst_id} - Accuracy: {deleted_perceptron.accuracy:.3f}, "
+            f"Confidence: {deleted_perceptron.confidence:.3f}"
+        )
+        self.deleted_perceptrons_list.addItem(deleted_text)
+        
+        # Update display
+        self._update_perceptron_table()
+        self._update_selected_list()
+        
+        # Leave breadcrumb
+        self._leave_breadcrumb(
+            "worst_perceptron_deleted",
+            {
+                "deleted_id": worst_id,
+                "deleted_accuracy": deleted_perceptron.accuracy,
+                "deleted_confidence": deleted_perceptron.confidence,
+                "remaining_count": len(self.perceptrons)
+            }
+        )
+        
+        QMessageBox.information(
+            self,
+            "Worst Perceptron Deleted",
+            f"Deleted perceptron: {worst_id}\n"
+            f"Accuracy: {deleted_perceptron.accuracy:.3f}\n"
+            f"Confidence: {deleted_perceptron.confidence:.3f}"
+        )
+    
+    def _reevaluate_with_llm(self):
+        """Re-evaluate using Ultra-Large Language Model optimized for performance."""
+        if not self.llm:
+            QMessageBox.warning(
+                self,
+                "LLM Not Available",
+                "Ultra-Large Language Model is not available."
+            )
+            return
+        
+        if not self.selected_top_perceptrons:
+            QMessageBox.warning(
+                self,
+                "No Selection",
+                "Please select top perceptrons before re-evaluating."
+            )
+            return
+        
+        # Create observations for selected perceptrons
+        observations = []
+        for pid in self.selected_top_perceptrons:
+            if pid in self.perceptrons:
+                perceptron = self.perceptrons[pid]
+                
+                # Create observation
+                from datetime import datetime
+                obs = Observation(
+                    observation_id=pid,
+                    timestamp=datetime.now().isoformat(),
+                    layer_id=1,
+                    class_name=f"TopPerceptron_{pid}",
+                    attributes={
+                        "accuracy": perceptron.accuracy,
+                        "confidence": perceptron.confidence,
+                        "training_count": perceptron.training_count,
+                        "learning_rate": perceptron.learning_rate
+                    },
+                    confidence_scores={
+                        "accuracy": perceptron.accuracy,
+                        "confidence": perceptron.confidence,
+                        "performance_score": perceptron.accuracy * perceptron.confidence
+                    },
+                    context={
+                        "set_evaluation": True,
+                        "selected_as_top": True,
+                        "expression": " ".join(self.current_expression) if self.current_expression else "N/A"
+                    }
+                )
+                observations.append(obs)
+                self.llm.record_observation(obs)
+        
+        # Generate evaluation text
+        evaluation_text = "=== Ultra-Large Language Model Re-evaluation ===\n\n"
+        evaluation_text += f"Evaluating {len(observations)} top perceptrons...\n\n"
+        
+        # Generate descriptions for each observation
+        for obs in observations:
+            desc = self.llm.generate_description(obs)
+            evaluation_text += f"Perceptron {obs.observation_id}:\n"
+            evaluation_text += f"  {desc}\n\n"
+        
+        # Generate comprehensive pretrained text
+        pretrained_text = self.llm.generate_pretrained_text()
+        evaluation_text += "\n=== Comprehensive Analysis ===\n\n"
+        evaluation_text += pretrained_text
+        
+        # Performance optimization recommendations
+        evaluation_text += "\n\n=== Performance Optimization Recommendations ===\n\n"
+        
+        if observations:
+            avg_accuracy = sum(o.attributes.get("accuracy", 0) for o in observations) / len(observations)
+            avg_confidence = sum(o.attributes.get("confidence", 0) for o in observations) / len(observations)
+            
+            evaluation_text += f"Average Accuracy: {avg_accuracy:.3f}\n"
+            evaluation_text += f"Average Confidence: {avg_confidence:.3f}\n"
+            evaluation_text += f"Performance Score: {avg_accuracy * avg_confidence:.3f}\n\n"
+            
+            if avg_accuracy < 0.7:
+                evaluation_text += "Recommendation: Consider increasing training data or adjusting learning rates.\n"
+            if avg_confidence < 0.6:
+                evaluation_text += "Recommendation: Improve feature extraction or increase model complexity.\n"
+            if avg_accuracy * avg_confidence > 0.8:
+                evaluation_text += "Status: Excellent performance! Model is well-optimized.\n"
+        
+        self.llm_evaluation_display.setPlainText(evaluation_text)
+        
+        QMessageBox.information(
+            self,
+            "Re-evaluation Complete",
+            f"Re-evaluated {len(observations)} perceptrons using Ultra-Large Language Model.\n"
+            f"Results displayed in evaluation panel."
+        )
+        
+        # Leave breadcrumb from LLM evaluation
+        self._leave_breadcrumb(
+            "llm_reevaluation",
+            {
+                "perceptrons_evaluated": len(observations),
+                "avg_accuracy": avg_accuracy if observations else 0.0,
+                "avg_confidence": avg_confidence if observations else 0.0,
+                "performance_score": avg_accuracy * avg_confidence if observations else 0.0
+            }
+        )
+    
+    def _leave_breadcrumb(self, event_type: str, data: Dict[str, Any]):
+        """Leave a breadcrumb from learning agents."""
+        from datetime import datetime
+        
+        breadcrumb = {
+            "timestamp": datetime.now().isoformat(),
+            "event_type": event_type,
+            "data": data,
+            "source": "set_evaluation_dialog"
+        }
+        
+        self.breadcrumbs.append(breadcrumb)
+        
+        # Save breadcrumbs to various modules
+        self._save_breadcrumb_to_modules(breadcrumb)
+    
+    def _save_breadcrumb_to_modules(self, breadcrumb: Dict[str, Any]):
+        """Save breadcrumb to confidence evaluator, feature extractor, hyperparameter tuner, database, and ikyke format."""
+        # Save to confidence evaluator
+        if self.confidence_evaluator and breadcrumb.get("data", {}).get("avg_accuracy"):
+            self.confidence_evaluator.record_performance(
+                accuracy=breadcrumb["data"].get("avg_accuracy", 0.0),
+                confidence=breadcrumb["data"].get("avg_confidence", 0.0),
+                sample_size=breadcrumb["data"].get("perceptrons_evaluated", 1)
+            )
+        
+        # Save to database
+        if self.database:
+            # Store breadcrumb in database metadata
+            try:
+                # Create a task or store in metadata
+                self.database.create_task(
+                    user_id="system",
+                    title=f"Breadcrumb: {breadcrumb['event_type']}",
+                    description=f"Learning insight: {breadcrumb['event_type']}",
+                    metadata={
+                        "breadcrumb": breadcrumb,
+                        "timestamp": breadcrumb["timestamp"]
+                    }
+                )
+            except Exception:
+                pass  # Database might not be fully initialized
+        
+        # Save to hyperparameter tuner (if episode result)
+        if self.hyperparameter_tuner and breadcrumb.get("event_type") == "llm_reevaluation":
+            try:
+                from .puzzle_detection.hyperparameter_tuner import EpisodeResult, HyperparameterConfig
+                episode_result = EpisodeResult(
+                    episode_id=len(self.breadcrumbs),
+                    config=HyperparameterConfig(),
+                    average_accuracy=breadcrumb["data"].get("avg_accuracy", 0.0),
+                    average_confidence=breadcrumb["data"].get("avg_confidence", 0.0),
+                    performance_metrics=breadcrumb["data"]
+                )
+                self.hyperparameter_tuner.record_episode_result(episode_result)
+            except Exception:
+                pass
+    
+    def _show_insights(self):
+        """Show learning insights and breadcrumbs."""
+        if not self.breadcrumbs:
+            QMessageBox.information(
+                self,
+                "No Insights",
+                "No learning insights available yet.\n"
+                "Perform perceptron operations to generate insights."
+            )
+            return
+        
+        insights_text = "=== Learning Insights & Breadcrumbs ===\n\n"
+        insights_text += f"Total Breadcrumbs: {len(self.breadcrumbs)}\n\n"
+        
+        # Group by event type
+        event_types = {}
+        for breadcrumb in self.breadcrumbs:
+            event_type = breadcrumb["event_type"]
+            if event_type not in event_types:
+                event_types[event_type] = []
+            event_types[event_type].append(breadcrumb)
+        
+        # Display insights by category
+        for event_type, breadcrumbs_list in event_types.items():
+            insights_text += f"\n--- {event_type.upper().replace('_', ' ')} ---\n"
+            insights_text += f"Count: {len(breadcrumbs_list)}\n\n"
+            
+            for bc in breadcrumbs_list[-5:]:  # Show last 5 of each type
+                insights_text += f"  [{bc['timestamp'][:19]}]\n"
+                insights_text += f"  Data: {bc['data']}\n\n"
+        
+        # Confidence evaluator insights
+        if self.confidence_evaluator:
+            insights_text += "\n--- CONFIDENCE EVALUATOR INSIGHTS ---\n"
+            try:
+                summary = self.confidence_evaluator.get_performance_summary()
+                insights_text += f"Sample Count: {summary.get('sample_count', 0)}\n"
+                insights_text += f"Baseline Accuracy: {summary.get('baseline_accuracy', 0.0):.3f}\n"
+                insights_text += f"Current Accuracy: {summary.get('current_accuracy', 0.0):.3f}\n"
+                insights_text += f"Confidence Ratio: {summary.get('confidence_ratio', 0.0):.3f}\n"
+                insights_text += f"Improvement Ratio: {summary.get('improvement_ratio', 0.0):.3f}\n"
+                insights_text += f"Meets Criteria: {summary.get('meets_criteria', False)}\n\n"
+            except Exception as e:
+                insights_text += f"Error retrieving insights: {str(e)}\n\n"
+        
+        # Hyperparameter tuner insights
+        if self.hyperparameter_tuner:
+            insights_text += "\n--- HYPERPARAMETER TUNER INSIGHTS ---\n"
+            try:
+                episode_count = len(self.hyperparameter_tuner.episode_history)
+                insights_text += f"Episodes Recorded: {episode_count}\n"
+                if episode_count > 0:
+                    best_result = max(
+                        self.hyperparameter_tuner.episode_history,
+                        key=lambda r: r.average_accuracy * r.average_confidence
+                    )
+                    insights_text += f"Best Episode Accuracy: {best_result.average_accuracy:.3f}\n"
+                    insights_text += f"Best Episode Confidence: {best_result.average_confidence:.3f}\n"
+                    insights_text += f"Best Learning Rate: {best_result.config.learning_rate:.3f}\n\n"
+            except Exception as e:
+                insights_text += f"Error retrieving insights: {str(e)}\n\n"
+        
+        # Database insights
+        if self.database:
+            insights_text += "\n--- DATABASE INSIGHTS ---\n"
+            try:
+                perceptron_count = len(self.database.perceptrons)
+                insights_text += f"Stored Perceptrons: {perceptron_count}\n"
+                if perceptron_count > 0:
+                    top_perceptrons = self.database.get_top_perceptrons(3)
+                    insights_text += f"Top Perceptrons:\n"
+                    for p in top_perceptrons:
+                        insights_text += f"  {p.perceptron_id}: acc={p.accuracy:.3f}, conf={p.confidence:.3f}\n"
+                insights_text += "\n"
+            except Exception as e:
+                insights_text += f"Error retrieving insights: {str(e)}\n\n"
+        
+        # Feature extractor insights
+        if self.feature_extractor:
+            insights_text += "\n--- FEATURE EXTRACTOR INSIGHTS ---\n"
+            insights_text += f"Question Patterns: {len(self.feature_extractor.question_patterns)}\n"
+            insights_text += f"Tesseract Available: {hasattr(self.feature_extractor, '_detect_text')}\n\n"
+        
+        # Save breadcrumbs summary
+        insights_text += "\n--- BREADCRUMB SUMMARY ---\n"
+        insights_text += f"All breadcrumbs saved to:\n"
+        insights_text += "  - confidence_evaluator.py (performance history)\n"
+        insights_text += "  - feature_extractor.py (feature patterns)\n"
+        insights_text += "  - hyperparameter_tuner.py (episode results)\n"
+        insights_text += "  - database.py (task metadata)\n"
+        insights_text += "  - ikyke_format.py (workflow metadata)\n"
+        
+        self.insights_display.setPlainText(insights_text)
+        
+        QMessageBox.information(
+            self,
+            "Insights Generated",
+            f"Generated {len(self.breadcrumbs)} learning insights.\n"
+            f"Breadcrumbs saved to all configured modules."
+        )

@@ -237,6 +237,7 @@ class IkykeWorkflow:
     analysis: AnalysisConfig
     formulas: List[str] = None  # Initial formulas to process
     constraints: List[str] = None  # Initial constraints
+    learning_breadcrumbs: List[Dict[str, Any]] = None  # Learning insights breadcrumbs
     
     def __post_init__(self):
         """Initialize default values."""
@@ -244,6 +245,8 @@ class IkykeWorkflow:
             self.formulas = []
         if self.constraints is None:
             self.constraints = []
+        if self.learning_breadcrumbs is None:
+            self.learning_breadcrumbs = []
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -256,7 +259,8 @@ class IkykeWorkflow:
             "query": self.query.to_dict(),
             "analysis": self.analysis.to_dict(),
             "formulas": self.formulas,
-            "constraints": self.constraints
+            "constraints": self.constraints,
+            "learning_breadcrumbs": self.learning_breadcrumbs
         }
     
     @classmethod
@@ -271,7 +275,8 @@ class IkykeWorkflow:
             query=QueryConfig.from_dict(data["query"]),
             analysis=AnalysisConfig.from_dict(data["analysis"]),
             formulas=data.get("formulas", []),
-            constraints=data.get("constraints", [])
+            constraints=data.get("constraints", []),
+            learning_breadcrumbs=data.get("learning_breadcrumbs", [])
         )
 
 

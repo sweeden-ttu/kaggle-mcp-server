@@ -245,6 +245,10 @@ class Database:
         self.tasks: Dict[str, Task] = {}
         self.schedule_events: Dict[str, ScheduleEvent] = {}
         self.perceptrons: Dict[str, Perceptron] = {}
+        
+        # Breadcrumb tracking for learning insights
+        self.learning_breadcrumbs: List[Dict[str, Any]] = []
+        
         self._load()
     
     def _load(self):
@@ -506,3 +510,31 @@ class Database:
         if self.delete_perceptron(worst.perceptron_id):
             return worst.perceptron_id
         return None
+    
+    def add_learning_breadcrumb(self, breadcrumb: Dict[str, Any]):
+        """
+        Add a learning breadcrumb from agents.
+        
+        Args:
+            breadcrumb: Dictionary containing breadcrumb data with keys:
+                - timestamp: ISO timestamp
+                - event_type: Type of event
+                - data: Event-specific data
+                - source: Source of the breadcrumb
+        """
+        self.learning_breadcrumbs.append(breadcrumb)
+        
+        # Keep only last 1000 breadcrumbs
+        if len(self.learning_breadcrumbs) > 1000:
+            self.learning_breadcrumbs = self.learning_breadcrumbs[-1000:]
+        
+        # Also save to file
+        self._save()
+    
+    def get_learning_breadcrumbs(self) -> List[Dict[str, Any]]:
+        """Get all learning breadcrumbs."""
+        return self.learning_breadcrumbs.copy()
+    
+    def get_breadcrumbs_by_type(self, event_type: str) -> List[Dict[str, Any]]:
+        """Get breadcrumbs filtered by event type."""
+        return [bc for bc in self.learning_breadcrumbs if bc.get("event_type") == event_type]
