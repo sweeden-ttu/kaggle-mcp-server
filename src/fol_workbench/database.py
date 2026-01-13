@@ -200,6 +200,37 @@ class ScheduleEvent:
         return cls(**data)
 
 
+@dataclass
+class Perceptron:
+    """Perceptron model for puzzle detection."""
+    perceptron_id: str
+    weights: List[float]  # Serialized weight vector
+    learning_rate: float
+    confidence: float  # Current confidence level (0.0-1.0)
+    accuracy: float  # Measured accuracy over time
+    created: str = None
+    last_used: str = None
+    performance_history: List[Dict[str, Any]] = None
+    metadata: Dict[str, Any] = None
+    
+    def __post_init__(self):
+        if self.created is None:
+            self.created = datetime.now().isoformat()
+        if self.last_used is None:
+            self.last_used = datetime.now().isoformat()
+        if self.performance_history is None:
+            self.performance_history = []
+        if self.metadata is None:
+            self.metadata = {}
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'Perceptron':
+        return cls(**data)
+
+
 class Database:
     """
     Simple JSON-based database for development.
@@ -213,6 +244,7 @@ class Database:
         self.theses: Dict[str, Thesis] = {}
         self.tasks: Dict[str, Task] = {}
         self.schedule_events: Dict[str, ScheduleEvent] = {}
+        self.perceptrons: Dict[str, Perceptron] = {}
         self._load()
     
     def _load(self):
@@ -229,6 +261,10 @@ class Database:
                 eid: ScheduleEvent.from_dict(e)
                 for eid, e in data.get('schedule_events', {}).items()
             }
+            self.perceptrons = {
+                pid: Perceptron.from_dict(p)
+                for pid, p in data.get('perceptrons', {}).items()
+            }
         except FileNotFoundError:
             pass  # Start with empty database
     
@@ -241,6 +277,9 @@ class Database:
             'tasks': {tid: t.to_dict() for tid, t in self.tasks.items()},
             'schedule_events': {
                 eid: e.to_dict() for eid, e in self.schedule_events.items()
+            },
+            'perceptrons': {
+                pid: p.to_dict() for pid, p in self.perceptrons.items()
             }
         }
         with open(self.db_path, 'w', encoding='utf-8') as f:
