@@ -2,6 +2,7 @@
 
 from typing import Optional, List, Dict, Any
 from pathlib import Path
+from datetime import datetime
 
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton,
@@ -19,6 +20,9 @@ from .data_layer import DataLayer, Checkpoint, ProjectMetadata
 from .predicate_dialog import PredicateDialog
 from .ikyke_format import IkykeFileFormat, IkykeWorkflow
 from .ikyke_protocol import IkykeProtocol
+from .hypothesis_dialog import HypothesisExperimentDialog
+from .autocomplete import SuggestionEngine
+from .autocomplete_widget import AutocompleteManager
 
 
 class FormulaHighlighter(QSyntaxHighlighter):
@@ -64,13 +68,17 @@ class FormulaHighlighter(QSyntaxHighlighter):
 
 
 class FormulaEditor(QPlainTextEdit):
-    """Enhanced text editor for FOL formulas."""
+    """Enhanced text editor for FOL formulas with autocomplete."""
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFont(QFont("Consolas", 12))
         self.highlighter = FormulaHighlighter(self.document())
         self.setPlaceholderText("Enter FOL formula here...\nExample: And(x, Or(y, Not(z)))")
+        
+        # Autocomplete system
+        self.suggestion_engine = SuggestionEngine()
+        self.autocomplete_manager = None  # Will be initialized by parent
     
     def get_formula(self) -> str:
         """Get the current formula text."""
@@ -79,6 +87,22 @@ class FormulaEditor(QPlainTextEdit):
     def set_formula(self, formula: str):
         """Set the formula text."""
         self.setPlainText(formula)
+    
+    def keyPressEvent(self, event):
+        """Handle key press events for autocomplete navigation."""
+        # Let autocomplete manager handle navigation keys
+        if self.autocomplete_manager:
+            if self.autocomplete_manager.handle_key_event(event):
+                return
+        
+        # Call parent implementation
+        super().keyPressEvent(event)
+    
+    def focusOutEvent(self, event):
+        """Hide autocomplete when editor loses focus."""
+        if self.autocomplete_manager:
+            self.autocomplete_manager.hide_suggestions()
+        super().focusOutEvent(event)
 
 
 class ModelViewer(QTableWidget):
@@ -195,6 +219,10 @@ class MainWindow(QMainWindow):
         self.current_ikyke_workflow: Optional[IkykeWorkflow] = None
         self.ikyke_protocol: Optional[IkykeProtocol] = None
         
+        # Analytics and preferences
+        self.click_analytics: Dict[str, int] = {}
+        self.touch_events: List[Dict[str, Any]] = []
+        
         # Create UI
         self._create_menu_bar()
         self._create_toolbar()
@@ -296,6 +324,19 @@ class MainWindow(QMainWindow):
         define_predicate_action.triggered.connect(self._define_predicate)
         tools_menu.addAction(define_predicate_action)
         
+        tools_menu.addSeparator()
+        
+        select_hypothesis_action = QAction("&Select Hypothesis/Experiment", self)
+        select_hypothesis_action.setShortcut("Ctrl+H")
+        select_hypothesis_action.triggered.connect(self._select_hypothesis_experiment)
+        tools_menu.addAction(select_hypothesis_action)
+        
+        tools_menu.addSeparator()
+        
+        preferences_action = QAction("&Preferences & Analytics", self)
+        preferences_action.triggered.connect(self._show_preferences_analytics)
+        tools_menu.addAction(preferences_action)
+        
         # View menu
         view_menu = menubar.addMenu("&View")
         
@@ -355,6 +396,15 @@ class MainWindow(QMainWindow):
         formula_layout = QVBoxLayout()
         
         self.formula_editor = FormulaEditor()
+        
+        # Initialize autocomplete
+        self.autocomplete_manager = AutocompleteManager(
+            self.formula_editor,
+            self.formula_editor.suggestion_engine,
+            on_suggestion_selected=self._on_suggestion_selected
+        )
+        self.formula_editor.autocomplete_manager = self.autocomplete_manager
+        
         formula_layout.addWidget(self.formula_editor)
         
         # Constraints editor
@@ -867,6 +917,159 @@ class MainWindow(QMainWindow):
         # This could update a results panel or log
         pass
     
+    def _select_hypothesis_experiment(self):
+        """Open dialog to select a hypothesis or experiment."""
+        dialog = HypothesisExperimentDialog(self)
+        
+        if dialog.exec():
+            # Check if hypothesis was selected
+            hypothesis = dialog.get_selected_hypothesis()
+            if hypothesis:
+                # Load hypothesis into formula editor
+                self.formula_editor.set_formula(hypothesis.formula)
+                self.status_bar.showMessage(
+                    f"Loaded hypothesis: {hypothesis.title}"
+                )
+                QMessageBox.information(
+                    self,
+                    "Hypothesis Loaded",
+                    f"Hypothesis '{hypothesis.title}' has been loaded.\n\n"
+                    f"Formula: {hypothesis.formula}\n\n"
+                    f"Expected: {hypothesis.expected_result or 'Not specified'}\n\n"
+                    f"You can now validate or find a model for this hypothesis."
+                )
+                return
+            
+            # Check if experiment was selected
+            experiment = dialog.get_selected_experiment()
+            if experiment:
+                # Create an IKYKE workflow from the experiment
+                workflow = IkykeFileFormat.create_default(experiment.title)
+                workflow.formulas = experiment.formulas
+                workflow.constraints = experiment.constraints
+                workflow.header.description = experiment.description
+                
+                self.current_ikyke_workflow = workflow
+                
+                # Optionally load first formula into editor
+                if experiment.formulas:
+                    self.formula_editor.set_formula(experiment.formulas[0])
+                
+                self.status_bar.showMessage(
+                    f"Loaded experiment: {experiment.title}"
+                )
+                
+                response = QMessageBox.question(
+                    self,
+                    "Experiment Loaded",
+                    f"Experiment '{experiment.title}' has been loaded.\n\n"
+                    f"Formulas: {len(experiment.formulas)}\n"
+                    f"Expected Insights: {experiment.expected_insights or 'Not specified'}\n\n"
+                    f"Would you like to run this experiment as an IKYKE workflow?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                
+                if response == QMessageBox.StandardButton.Yes:
+                    self._run_ikyke_workflow()
+    
+    def _on_suggestion_selected(self, text: str):
+        """Handle when user selects an autocomplete suggestion."""
+        # Track usage
+        self.formula_editor.suggestion_engine.track_usage(text)
+        self.status_bar.showMessage(f"Applied suggestion: {text[:50]}...")
+    
+    def _track_click(self, widget_name: str, event_type: str = "click"):
+        """Track click/usage analytics."""
+        key = f"{widget_name}:{event_type}"
+        self.click_analytics[key] = self.click_analytics.get(key, 0) + 1
+        
+        # Update font preferences based on clicks (if applicable)
+        if hasattr(self.formula_editor, 'font'):
+            font = self.formula_editor.font()
+            self.formula_editor.suggestion_engine.update_font_preference(
+                font.family(),
+                font.pointSize()
+            )
+    
+    def _track_touch_event(self, event_type: str, data: Dict[str, Any]):
+        """Track touch/click events for analytics."""
+        event_data = {
+            "type": event_type,
+            "timestamp": datetime.now().isoformat(),
+            "data": data
+        }
+        self.touch_events.append(event_data)
+        
+        # Keep only last 1000 events
+        if len(self.touch_events) > 1000:
+            self.touch_events = self.touch_events[-1000:]
+    
+    def _show_preferences_analytics(self):
+        """Show preferences and analytics dialog."""
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QTabWidget, QTextEdit, QLabel
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Preferences & Analytics")
+        dialog.setMinimumSize(600, 500)
+        
+        layout = QVBoxLayout(dialog)
+        
+        tabs = QTabWidget()
+        
+        # Analytics tab
+        analytics_tab = QTextEdit()
+        analytics_tab.setReadOnly(True)
+        analytics_tab.setFont(QFont("Consolas", 10))
+        
+        analytics_data = self.formula_editor.suggestion_engine.get_analytics()
+        analytics_text = "=== Usage Analytics ===\n\n"
+        analytics_text += f"Total Suggestions Used: {analytics_data['total_suggestions_used']}\n\n"
+        analytics_text += "Most Used Formulas:\n"
+        for formula, count in analytics_data['most_used'].items():
+            analytics_text += f"  {formula}: {count} times\n"
+        
+        analytics_text += f"\nPreferred Suggestions: {analytics_data['preferred_count']}\n"
+        analytics_text += f"Ignored Suggestions: {analytics_data['ignored_count']}\n\n"
+        
+        analytics_text += "Font Preferences:\n"
+        font_prefs = analytics_data['font_preferences']
+        analytics_text += f"  Family: {font_prefs['family']}\n"
+        analytics_text += f"  Size: {font_prefs['size']}\n\n"
+        
+        analytics_text += "=== Click Analytics ===\n\n"
+        for key, count in self.click_analytics.items():
+            analytics_text += f"{key}: {count} clicks\n"
+        
+        analytics_tab.setPlainText(analytics_text)
+        tabs.addTab(analytics_tab, "Analytics")
+        
+        # Preferences tab
+        prefs_tab = QTextEdit()
+        prefs_tab.setReadOnly(True)
+        prefs_tab.setFont(QFont("Consolas", 10))
+        
+        prefs = self.formula_editor.suggestion_engine.preferences
+        prefs_text = "=== User Preferences ===\n\n"
+        prefs_text += f"Font Family: {prefs.font_family}\n"
+        prefs_text += f"Font Size: {prefs.font_size}\n\n"
+        prefs_text += f"Preferred Suggestions ({len(prefs.preferred_suggestions)}):\n"
+        for suggestion in list(prefs.preferred_suggestions)[:20]:
+            prefs_text += f"  • {suggestion}\n"
+        prefs_text += f"\nIgnored Suggestions ({len(prefs.ignored_suggestions)}):\n"
+        for suggestion in list(prefs.ignored_suggestions)[:20]:
+            prefs_text += f"  • {suggestion}\n"
+        
+        prefs_tab.setPlainText(prefs_text)
+        tabs.addTab(prefs_tab, "Preferences")
+        
+        layout.addWidget(tabs)
+        
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        buttons.accepted.connect(dialog.accept)
+        layout.addWidget(buttons)
+        
+        dialog.exec()
+    
     def _show_about(self):
         """Show about dialog."""
         QMessageBox.about(
@@ -875,5 +1078,6 @@ class MainWindow(QMainWindow):
             "FOL Workbench v1.0.0\n\n"
             "A professional tool for First-Order Logic validation and model proposal.\n\n"
             "Built with PyQt6 and Z3 Solver.\n\n"
-            "Includes IKYKE protocol for automated workflows."
+            "Includes IKYKE protocol for automated workflows.\n\n"
+            "Features intelligent autocomplete with learning capabilities."
         )
