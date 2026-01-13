@@ -969,7 +969,7 @@ def create_gpg_signature(
             cmd.extend(["--local-user", key_id])
         
         if passphrase:
-            cmd.extend(["--passphrase", passphrase, "--pinentry-mode", "loopback"])
+            cmd.extend(["--passphrase-fd", "0", "--pinentry-mode", "loopback"])
             
         if armor:
             cmd.append("--armor")
@@ -984,13 +984,9 @@ def create_gpg_signature(
             
         cmd.append(file_path)
         
-      sing Agent2's private key and passphrase.
-Verifies the decrypted content matches the original message.
-You can run the test using:
-￼
-python test_agent_encrypted_comms.py
-  result = subprocess.run(
+        result = subprocess.run(
             cmd,
+            input=passphrase if passphrase else None,
             capture_output=True,
             text=True
         )
