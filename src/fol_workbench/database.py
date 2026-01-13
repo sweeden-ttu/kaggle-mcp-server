@@ -361,3 +361,109 @@ class Database:
         if end_date:
             events = [e for e in events if e.start_time <= end_date]
         return events
+    
+    # Perceptron methods
+    def create_perceptron(
+        self,
+        weights: List[float],
+        learning_rate: float,
+        confidence: float = 0.0,
+        accuracy: float = 0.0,
+        perceptron_id: Optional[str] = None,
+        **kwargs
+    ) -> Perceptron:
+        """Save new perceptron to database."""
+        import uuid
+        if perceptron_id is None:
+            perceptron_id = str(uuid.uuid4())
+        perceptron = Perceptron(
+            perceptron_id=perceptron_id,
+            weights=weights,
+            learning_rate=learning_rate,
+            confidence=confidence,
+            accuracy=accuracy,
+            **kwargs
+        )
+        self.perceptrons[perceptron_id] = perceptron
+        self._save()
+        return perceptron
+    
+    def get_perceptron(self, perceptron_id: str) -> Optional[Perceptron]:
+        """Retrieve perceptron by ID."""
+        return self.perceptrons.get(perceptron_id)
+    
+    def get_high_confidence_perceptrons(self, threshold: float = 0.8) -> List[Perceptron]:
+        """Get perceptrons above confidence threshold."""
+        return [
+            p for p in self.perceptrons.values()
+            if p.confidence >= threshold
+        ]
+    
+    def get_low_accuracy_perceptrons(
+        self,
+        accuracy_threshold: float = 0.6,
+        age_days: int = 3
+    ) -> List[Perceptron]:
+        """Get perceptrons below accuracy threshold older than specified days."""
+        from datetime import datetime, timedelta
+        cutoff_date = (datetime.now() - timedelta(days=age_days)).isoformat()
+        
+        return [
+            p for p in self.perceptrons.values()
+            if p.accuracy < accuracy_threshold
+            and p.created < cutoff_date
+            and p.confidence < 0.5
+        ]
+    
+    def delete_perceptron(self, perceptron_id: str) -> bool:
+        """Remove perceptron from database."""
+        if perceptron_id in self.perceptrons:
+            del self.perceptrons[perceptron_id]
+            self._save()
+            return True
+        return False
+    
+    def update_perceptron_performance(
+        self,
+        perceptron_id: str,
+        accuracy: Optional[float] = None,
+        confidence: Optional[float] = None
+    ) -> Optional[Perceptron]:
+        """Update accuracy and confidence for a perceptron."""
+        perceptron = self.perceptrons.get(perceptron_id)
+        if not perceptron:
+            return None
+        
+        if accuracy is not None:
+            perceptron.accuracy = accuracy
+        if confidence is not None:
+            perceptron.confidence = confidence
+        
+        perceptron.last_used = datetime.now().isoformat()
+        
+        # Add to performance history
+        perceptron.performance_history.append({
+            'timestamp': datetime.now().isoformat(),
+            'accuracy': perceptron.accuracy,
+            'confidence': perceptron.confidence
+        })
+        
+        # Keep only last 100 entries
+        if len(perceptron.performance_history) > 100:
+            perceptron.performance_history = perceptron.performance_history[-100:]
+        
+        self._save()
+        return perceptron
+    
+    def cleanup_old_perceptrons(
+        self,
+        accuracy_threshold: float = 0.6,
+        age_days: int = 3
+    ) -> int:
+        """Delete low-accuracy perceptrons after specified days. Returns count deleted."""
+        low_accuracy = self.get_low_accuracy_perceptrons(accuracy_threshold, age_days)
+        count = 0
+        for perceptron in low_accuracy:
+            if self.delete_perceptron(perceptron.perceptron_id):
+                count += 1
+        return count
