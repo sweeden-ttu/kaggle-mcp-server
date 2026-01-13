@@ -439,11 +439,23 @@ class LogicEngine:
                 raise ValueError("Only simple function calls are supported")
 
             func_name = node.func.id
-            if func_name not in context:
-                raise ValueError(f"Unknown symbol: {func_name}")
-
-            func = context[func_name]
             args = [self._eval_ast_node(arg, context) for arg in node.args]
+            if func_name not in context:
+                # Auto-declare uninterpreted predicate/function symbols on first use.
+                #
+                # This keeps the authoring UX consistent with the auto-declared variable behavior:
+                # users can write `P(x)` without pre-registering `P` as a Z3 Function.
+                #
+                # We default to a Bool-returning predicate with a domain matching the argument sorts.
+                try:
+                    domain_sorts = [a.sort() for a in args]
+                    func = Function(func_name, *domain_sorts, BoolSort())
+                    self.functions[func_name] = func
+                    context[func_name] = func
+                except Exception as e:
+                    raise ValueError(f"Failed to auto-declare function {func_name}: {e}")
+            else:
+                func = context[func_name]
             return func(*args)
 
         if isinstance(node, ast.Name):
@@ -1126,6 +1138,7 @@ class LogicEngine:
             # Fold left-to-right so we preserve a stable quantifier order.
             p_acc: List[Tuple[str, List[Any]]] = []
             m_acc: Any = None
+
             for a in args:
                 p, m = self._extract_prenex(a)
                 if m_acc is None:
@@ -1135,40 +1148,40 @@ class LogicEngine:
                 p1, m1 = p_acc, m_acc
                 p2, m2 = p, m
 
-            used = set()
-            used |= self._collect_free_names(m1)
-            used |= self._collect_free_names(m2)
-            # Also reserve already-bound names from both prefixes
-            for _, vs in p1 + p2:
-                for v in vs:
-                    used.add(v.decl().name())
+                used: Set[str] = set()
+                used |= self._collect_free_names(m1)
+                used |= self._collect_free_names(m2)
+                # Also reserve already-bound names from both prefixes
+                for _, vs in p1 + p2:
+                    for v in vs:
+                        used.add(v.decl().name())
 
-            # Rename bound variables in p1/p2 to avoid collisions/capture when concatenating.
-            p1_renamed: List[Tuple[str, List[Any]]] = []
-            for quant, vs in p1:
-                new_vs: List[Any] = []
-                for v in vs:
-                    fresh = self._fresh_name(v.decl().name(), used)
-                    if fresh != v.decl().name():
-                        v_new = Const(fresh, v.sort())
-                        m1 = self._alpha_rename_var(m1, v, v_new)
-                        new_vs.append(v_new)
-                    else:
-                        new_vs.append(v)
-                p1_renamed.append((quant, new_vs))
+                # Rename bound variables in p1/p2 to avoid collisions/capture when concatenating.
+                p1_renamed: List[Tuple[str, List[Any]]] = []
+                for quant, vs in p1:
+                    new_vs: List[Any] = []
+                    for v in vs:
+                        fresh = self._fresh_name(v.decl().name(), used)
+                        if fresh != v.decl().name():
+                            v_new = Const(fresh, v.sort())
+                            m1 = self._alpha_rename_var(m1, v, v_new)
+                            new_vs.append(v_new)
+                        else:
+                            new_vs.append(v)
+                    p1_renamed.append((quant, new_vs))
 
-            p2_renamed: List[Tuple[str, List[Any]]] = []
-            for quant, vs in p2:
-                new_vs = []
-                for v in vs:
-                    fresh = self._fresh_name(v.decl().name(), used)
-                    if fresh != v.decl().name():
-                        v_new = Const(fresh, v.sort())
-                        m2 = self._alpha_rename_var(m2, v, v_new)
-                        new_vs.append(v_new)
-                    else:
-                        new_vs.append(v)
-                p2_renamed.append((quant, new_vs))
+                p2_renamed: List[Tuple[str, List[Any]]] = []
+                for quant, vs in p2:
+                    new_vs: List[Any] = []
+                    for v in vs:
+                        fresh = self._fresh_name(v.decl().name(), used)
+                        if fresh != v.decl().name():
+                            v_new = Const(fresh, v.sort())
+                            m2 = self._alpha_rename_var(m2, v, v_new)
+                            new_vs.append(v_new)
+                        else:
+                            new_vs.append(v)
+                    p2_renamed.append((quant, new_vs))
 
                 matrix = And(m1, m2) if op_is_and else Or(m1, m2)
                 p_acc = p1_renamed + p2_renamed
