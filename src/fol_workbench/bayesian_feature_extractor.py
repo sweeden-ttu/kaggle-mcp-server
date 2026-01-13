@@ -1,4 +1,4 @@
-"""
+f"""
 Bayesian Feature Extractor with Layered Class Collections
 
 Implements a novel ML strategy using Bayesian feature extractors that organize
