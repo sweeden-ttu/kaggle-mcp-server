@@ -1,7 +1,10 @@
 """Kaggle MCP Server implementation."""
 
+import json
 import os
-from typing import Optional, List
+import re
+import subprocess
+from typing import Optional, List, Dict, Set
 from mcp.server.fastmcp import FastMCP
 from kaggle.api.kaggle_api_extended import KaggleApi
 
@@ -420,6 +423,143 @@ def get_kernel_output(
         return f"Successfully downloaded kernel output to {path}"
     except Exception as e:
         return f"Error downloading kernel output: {str(e)}"
+
+
+def _extract_proposed_model_lines(raw_output: str) -> List[str]:
+    """
+    Pull out the lines that appear under the `Proposed Model` heading.
+    Falls back to the whole string if the heading is not present.
+    """
+    lines = raw_output.splitlines()
+    start_idx = None
+    for idx, line in enumerate(lines):
+        if "proposed model" in line.lower():
+            start_idx = idx + 1
+            break
+
+    if start_idx is None:
+        return lines
+
+    collected: List[str] = []
+    for line in lines[start_idx:]:
+        trimmed = line.strip()
+        if not trimmed:
+            # stop at the first empty line after the header
+            break
+        # stop if we hit another section header
+        if re.match(r"^[A-Za-z][A-Za-z0-9 _-]*:$", trimmed):
+            break
+        collected.append(line)
+    return collected
+
+
+def _build_graph_from_atoms(lines: List[str]) -> Dict[str, object]:
+    """
+    Parse predicate atoms into a simple directed graph representation.
+    Binary predicates become edges (src, dst, label=predicate).
+    Unary predicates create isolated labeled nodes.
+    """
+    atom_pattern = re.compile(r"([A-Za-z_][\w]*)\(([^()]*)\)")
+    nodes: Set[str] = set()
+    edges: List[Dict[str, str]] = []
+
+    for line in lines:
+        for match in atom_pattern.finditer(line):
+            predicate, arg_blob = match.groups()
+            args = [arg.strip() for arg in arg_blob.split(",") if arg.strip()]
+            if len(args) == 2:
+                src, dst = args
+                nodes.update([src, dst])
+                edges.append({"source": src, "target": dst, "label": predicate})
+            elif len(args) == 1:
+                nodes.add(args[0])
+
+    # Build a DOT graph for quick visualization
+    dot_lines = ["digraph ProposedModel {", "  rankdir=LR;"]
+    for node in sorted(nodes):
+        dot_lines.append(f'  "{node}";')
+    for edge in edges:
+        label = edge.get("label", "")
+        label_part = f' [label="{label}"]' if label else ""
+        dot_lines.append(f'  "{edge["source"]}" -> "{edge["target"]}"{label_part};')
+    dot_lines.append("}")
+
+    return {
+        "nodes": sorted(nodes),
+        "edges": edges,
+        "dot": "\n".join(dot_lines)
+    }
+
+
+@mcp.tool()
+def parse_z3_proposed_model(model_output: str) -> str:
+    """
+    Parse a Z3 textual model output and return a graph-friendly view of the
+    `Proposed Model` section. The result includes nodes, labeled edges, and a
+    Graphviz DOT string to visualize the relationships.
+
+    Args:
+        model_output: Full Z3 solver output as text.
+
+    Returns:
+        JSON string with keys:
+            - nodes: list of node names
+            - edges: list of {source, target, label}
+            - dot: Graphviz DOT description for quick rendering
+    """
+    lines = _extract_proposed_model_lines(model_output)
+    graph = _build_graph_from_atoms(lines)
+    return json.dumps(graph)
+
+
+def _git_diff_output(branch_range: str, paths: Optional[List[str]], context_lines: int, stat_only: bool) -> str:
+    """Run git diff with optional paths."""
+    cmd = ["git", "diff", branch_range]
+    if stat_only:
+        cmd.append("--stat")
+    else:
+        cmd.extend(["--unified", str(max(0, context_lines))])
+    if paths:
+        cmd.extend(paths)
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode not in (0, 1):
+        return f"Error computing diff: {result.stderr.strip() or result.stdout.strip()}"
+    return result.stdout.strip()
+
+
+@mcp.tool()
+def diff_against_main(
+    target_branch: str = "main",
+    paths: Optional[List[str]] = None,
+    context_lines: int = 3,
+    stat_only: bool = False,
+    max_output_chars: int = 8000
+) -> str:
+    """
+    Compare current branch changes against the target branch before evaluation.
+
+    Args:
+        target_branch: Branch to compare against (default: "main").
+        paths: Optional list of paths to limit the diff.
+        context_lines: Number of context lines to include when not using stat_only.
+        stat_only: Return only a summary (files/insertions/deletions).
+        max_output_chars: Truncate output to this many characters to avoid overload.
+
+    Returns:
+        Diff output or error message.
+    """
+    try:
+        branch_range = f"{target_branch}...HEAD"
+        output = _git_diff_output(branch_range, paths, context_lines, stat_only)
+        if not output:
+            return "No differences found between branches."
+        if len(output) > max_output_chars:
+            return f"{output[:max_output_chars]}\n\n[output truncated at {max_output_chars} characters]"
+        return output
+    except FileNotFoundError:
+        return "git is not available on this system."
+    except Exception as e:
+        return f"Unexpected error running diff: {str(e)}"
 
 
 def main():
