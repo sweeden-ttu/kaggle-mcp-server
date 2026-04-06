@@ -271,7 +271,7 @@ class Database:
             d = dict(r)
             d["state_vector"] = json.loads(d["state_vector"])
             d["converged"] = bool(d["converged"])
-            return results
+            results.append(d)
         return results
 
     def get_stats(self) -> Dict[str, Any]:
