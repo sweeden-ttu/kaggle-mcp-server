@@ -55,3 +55,9 @@ dmypy.json
 .cursor/
 *.db
 *.sqlite
+
+# ChromaDB
+chroma_db/
+
+# MLSysEng data
+.mlsyseng/
