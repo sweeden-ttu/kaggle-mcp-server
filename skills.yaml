@@ -1,0 +1,139 @@
+# MLSysEng MoE - Skill definitions for all platforms
+# Source of truth for skill generation
+
+name: mlsyseng-moe
+description: >
+  Machine Learning Systems Expert - Mixture of Experts system that extracts
+  knowledge from ML Principles PDFs, registers chapter experts with
+  skills/strategy/formulas, and builds Kaggle competition entries using
+  RAG-informed skill selection with state convergence loops.
+
+version: "0.1.0"
+
+mcp_server:
+  command: "python"
+  args: ["-m", "mlsyseng_mcp.server"]
+  env:
+    ML_PRINCIPLES_PATH: "${ML_PRINCIPLES_PATH:-~/ML_Principles_Chapters}"
+    SQLITE_DB_PATH: "${SQLITE_DB_PATH:-~/.mlsyseng/mlsyseng.db}"
+    CHROMA_DB_PATH: "${CHROMA_DB_PATH:-~/.mlsyseng/chroma_db}"
+    KAGGLE_SKILLS_PATH: "${KAGGLE_SKILLS_PATH:-~/skills}"
+
+tools:
+  - name: extract-knowledge
+    description: Extract PDFs, index chapters, create experts
+    arguments:
+      force_reindex:
+        type: boolean
+        default: false
+        description: Re-extract even if already indexed
+
+  - name: evolve
+    description: Run full pipeline with convergence loop
+    arguments:
+      competition:
+        type: string
+        default: "titanic"
+      max_iterations:
+        type: integer
+        default: 10
+      epsilon:
+        type: number
+        default: 0.001
+      patience:
+        type: integer
+        default: 3
+
+  - name: search-concepts
+    description: Semantic search over ML Principles
+    arguments:
+      query:
+        type: string
+        required: true
+      n_results:
+        type: integer
+        default: 5
+
+  - name: list-experts
+    description: List all chapter experts
+
+  - name: build-entry
+    description: Build competition entry using expert knowledge
+    arguments:
+      competition:
+        type: string
+        default: "titanic"
+      top_k_experts:
+        type: integer
+        default: 3
+
+  - name: run-rdagent
+    description: Run rdagent with ML Principles context
+    arguments:
+      competition:
+        type: string
+        default: "titanic"
+      description:
+        type: string
+        default: ""
+
+  - name: get-extraction-status
+    description: Check extraction progress
+
+  - name: get-stats
+    description: System statistics
+
+skill_content: |
+  # MLSysEng MoE Expert System
+
+  You have access to the MLSysEng MoE (Mixture of Experts) system for building
+  ML competition entries using knowledge extracted from ML Principles textbooks.
+
+  ## Workflow
+
+  1. **Extract Knowledge**: Use `extract-knowledge` to scan and index ML Principles PDFs
+  2. **Search Concepts**: Use `search-concepts` to find relevant ML techniques
+  3. **List Experts**: Use `list-experts` to see available chapter experts
+  4. **Build Entry**: Use `build-entry` with a competition name to generate an entry
+  5. **Evolve**: Use `evolve` to run the full pipeline with convergence loop
+
+  ## Expert System
+
+  Each ML Principles chapter becomes an expert with:
+  - **Capabilities**: What the expert can do
+  - **Skills**: Kaggle skills the expert recommends
+  - **Strategy**: Step-by-step approach (Baseline -> EDA -> Feature Eng -> Model -> Submit)
+  - **Formula**: Mathematical objective (e.g., minimize_validation_loss)
+  - **Loop Config**: Convergence parameters (epsilon, max_iterations, patience)
+
+  ## State Convergence
+
+  The system uses an L2-norm convergence loop:
+  - Exit condition: ||state[n] - state[n-1]||_2 < epsilon
+  - Patience: exits after N consecutive converging iterations
+  - Each iteration refines the entry using expert knowledge
+
+  ## Best Practices
+
+  - Start with `extract-knowledge` to build the knowledge base
+  - Use `search-concepts` before `build-entry` to understand available knowledge
+  - Set appropriate epsilon (0.001 default) for convergence sensitivity
+  - Use `get-stats` to monitor system health
+
+platforms:
+  openclaw:
+    skill_path: "~/.openclaw/workspace/skills/mlsyseng/SKILL.md"
+    config_path: "~/.openclaw/openclaw.json"
+    db_base: "~/.openclaw/workspace/mlsyseng"
+
+  claude_desktop:
+    config_path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+
+  cursor:
+    skill_path: "~/.cursor/skills/mlsyseng/SKILL.md"
+
+  gemini:
+    config_path: "~/.gemini/mcp_config.json"
+
+  generic:
+    skill_path: "~/.skills/mlsyseng/SKILL.md"
