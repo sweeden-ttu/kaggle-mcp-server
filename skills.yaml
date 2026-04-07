@@ -1,0 +1,92 @@
+# MLSysEng MoE Skills Configuration
+# Source of truth for all platform-specific skill generation.
+
+name: mlsyseng-moe
+version: "0.1.0"
+description: >
+  Machine Learning Systems Expert Mixture of Experts.
+  Extracts knowledge from ML Principles PDFs, registers chapter experts
+  with skills/strategy/formulas, and builds Kaggle competition entries
+  using RAG-informed skill selection with state convergence loops.
+
+mcp_server:
+  command: python
+  args:
+    - "-m"
+    - "src.mlsyseng_moe.server"
+  env:
+    ML_PRINCIPLES_PATH: "${ML_PRINCIPLES_PATH}"
+    SQLITE_DB_PATH: "${SQLITE_DB_PATH}"
+    CHROMA_DB_PATH: "${CHROMA_DB_PATH}"
+
+tools:
+  - name: extract-knowledge
+    description: "Extract PDFs, index chapters, create experts"
+    aliases: ["evolve"]
+  - name: search-concepts
+    description: "Semantic search over ML Principles"
+  - name: list-experts
+    description: "List all chapter experts"
+  - name: build-entry
+    description: "Build competition entry using expert knowledge"
+  - name: run-rdagent
+    description: "Run rdagent with ML Principles context"
+  - name: ask-expert
+    description: "Query specific chapter expert"
+  - name: get-extraction-status
+    description: "Check extraction progress"
+  - name: get-stats
+    description: "System statistics"
+
+skill_content: |
+  # MLSysEng MoE - ML Systems Expert Mixture of Experts
+
+  ## What This Skill Does
+  Provides a Mixture of Experts system that:
+  1. Extracts knowledge from ML Principles PDF chapters using docling
+  2. Registers chapter experts with skills, strategy, and mathematical formulas
+  3. Builds Kaggle competition entries using RAG-informed skill selection
+  4. Runs state convergence loops to optimize expert recommendations
+
+  ## Available MCP Tools
+  - `extract-knowledge`: Extract PDFs, index chapters, create experts
+  - `search-concepts`: Semantic search over ML Principles knowledge
+  - `list-experts`: List all registered chapter experts
+  - `build-entry`: Build competition entry using expert knowledge
+  - `run-rdagent`: Run rdagent with ML Principles context
+  - `ask-expert`: Query a specific chapter expert
+  - `get-extraction-status`: Check extraction progress
+  - `get-stats`: Get system statistics
+
+  ## Usage Flow
+  1. Run `extract-knowledge` to index all ML Principles chapters
+  2. Use `list-experts` to see available chapter experts
+  3. Use `build-entry(competition="titanic")` to build a competition plan
+  4. Use `evolve(competition="titanic")` to run convergence loop
+  5. Use `search-concepts(query="neural networks")` for specific topics
+
+  ## Expert Convergence Loop
+  The system uses an L2 norm convergence criterion:
+  ```
+  ||state[n] - state[n-1]||_2 < epsilon
+  ```
+  Default: epsilon=0.001, max_iterations=10, patience=3
+
+platforms:
+  openclaw:
+    skill_dir: "~/.openclaw/workspace/skills/mlsyseng"
+    skill_file: "SKILL.md"
+    config_path: "~/.openclaw/openclaw.json"
+    config_key: "mcpServers"
+  claude_desktop:
+    config_path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+    config_key: "mcpServers"
+  cursor:
+    skill_dir: "~/.cursor/skills/mlsyseng"
+    skill_file: "SKILL.md"
+  gemini:
+    config_path: "~/.gemini/mcp_config.json"
+    config_key: "mcpServers"
+  generic:
+    skill_dir: "~/.skills/mlsyseng"
+    skill_file: "SKILL.md"
