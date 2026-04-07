@@ -6,7 +6,7 @@ Stores extracted chapter content, concepts, and expert metadata.
 import json
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -88,7 +88,7 @@ class Database:
         """Insert or update a chapter record. Returns the chapter id."""
         conn = self._connect()
         try:
-            now = datetime.utcnow().isoformat()
+            now = datetime.now(timezone.utc).isoformat()
             conn.execute(
                 """
                 INSERT INTO chapters (chapter_num, title, source_path, markdown_content, concepts, extracted_at, page_count)
@@ -138,7 +138,7 @@ class Database:
         """Insert or update an expert record. Returns expert id."""
         conn = self._connect()
         try:
-            now = datetime.utcnow().isoformat()
+            now = datetime.now(timezone.utc).isoformat()
             conn.execute(
                 """
                 INSERT INTO experts (expert_name, slug, chapter_id, capabilities, skills, strategy, formula, loop_config, created_at, updated_at)
@@ -204,7 +204,7 @@ class Database:
     ) -> None:
         conn = self._connect()
         try:
-            now = datetime.utcnow().isoformat()
+            now = datetime.now(timezone.utc).isoformat()
             if status == "started":
                 conn.execute(
                     "INSERT INTO extraction_status (chapter_num, status, started_at) VALUES (?, ?, ?)",
