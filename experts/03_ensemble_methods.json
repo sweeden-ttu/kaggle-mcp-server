@@ -1,0 +1,32 @@
+{
+  "expert_name": "03_Ensemble Methods",
+  "slug": "03_ensemble_methods",
+  "chapter_id": null,
+  "capabilities": [
+    "Build baseline models quickly",
+    "Systematic approach to ML problems",
+    "Apply Bagging techniques",
+    "Apply Boosting techniques",
+    "Apply Random Forest techniques",
+    "Apply Stacking methods",
+    "Apply Voting ensembles"
+  ],
+  "skills": [
+    "~/skills/kaggle-ensembler",
+    "~/skills/kaggle-model-trainer"
+  ],
+  "strategy": "Baseline -> EDA -> Feature Engineering -> Model Selection -> Hyperparameter Tuning -> Ensemble -> Submit",
+  "formula": {
+    "objective": "minimize_validation_loss",
+    "function": "L = f(X, theta, alpha)",
+    "metrics": ["accuracy", "f1_score", "rmse"],
+    "description": "Optimize model performance using Ensemble Methods principles"
+  },
+  "loop_config": {
+    "objective": "minimize_validation_loss",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 10,
+    "patience": 3
+  }
+}

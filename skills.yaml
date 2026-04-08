@@ -1,0 +1,120 @@
+# MLSysEng MoE Skills Definition
+# Source of truth for all platform skill configurations
+
+name: mlsyseng-moe
+version: "0.1.0"
+description: >
+  Machine Learning Systems Expert Mixture of Experts.
+  Extracts knowledge from ML Principles PDFs, registers chapter experts,
+  and builds Kaggle competition entries using RAG-informed skill selection.
+
+mcp_server:
+  name: mlsyseng-mcp
+  command: python
+  args:
+    - "-m"
+    - "src.mlsyseng_mcp.server"
+  env:
+    ML_PRINCIPLES_PATH: "${ML_PRINCIPLES_PATH:-~/Desktop/Machine Learning Principles - Chapters}"
+    SQLITE_DB_PATH: "${SQLITE_DB_PATH:-~/.mlsyseng/mlsyseng.db}"
+    CHROMA_DB_PATH: "${CHROMA_DB_PATH:-~/.mlsyseng/chroma_db}"
+    KAGGLE_SKILLS_PATH: "${KAGGLE_SKILLS_PATH:-~/skills}"
+
+skills:
+  - id: extract-knowledge
+    name: Extract ML Knowledge
+    description: >
+      Extract knowledge from ML Principles PDFs using docling.
+      Indexes chapters, generates embeddings, and creates expert definitions.
+    usage: |
+      Use this skill to index ML Principles chapters.
+      Run with force_reindex=true to re-extract already indexed chapters.
+    examples:
+      - "extract-knowledge(force_reindex=false)"
+      - "extract-knowledge(force_reindex=true)"
+
+  - id: search-concepts
+    name: Search ML Concepts
+    description: >
+      Semantic search over indexed ML Principles content using embeddings.
+    usage: |
+      Search for specific ML concepts, techniques, or topics.
+    examples:
+      - 'search-concepts(query="neural network optimization", n_results=5)'
+      - 'search-concepts(query="regularization techniques")'
+
+  - id: list-experts
+    name: List ML Experts
+    description: >
+      List all registered chapter experts with their capabilities,
+      skills, strategies, and formulas.
+    usage: |
+      View all available ML experts and their specializations.
+    examples:
+      - "list-experts()"
+
+  - id: build-entry
+    name: Build Competition Entry
+    description: >
+      Build a Kaggle competition entry using expert knowledge.
+      Uses RAG to select relevant experts and their skills.
+    usage: |
+      Provide a competition name to get an entry plan with
+      selected experts, skills, and strategy.
+    examples:
+      - 'build-entry(competition="titanic")'
+      - 'build-entry(competition="house-prices")'
+
+  - id: evolve
+    name: Run Convergence Loop
+    description: >
+      Run the state convergence loop for iterative competition building.
+      Exit condition: ||state[n] - state[n-1]||_2 < epsilon
+    usage: |
+      Iteratively refine a competition entry using expert knowledge
+      until the state converges or max iterations are reached.
+    examples:
+      - 'evolve(competition="titanic")'
+
+  - id: run-rdagent
+    name: Run RDAgent with ML Context
+    description: >
+      Generate rdagent context with ML Principles knowledge
+      for Kaggle data_science competitions.
+    usage: |
+      Prepare context from indexed ML Principles for guiding rdagent.
+    examples:
+      - 'run-rdagent(competition="titanic", description="Predict survival")'
+
+  - id: get-stats
+    name: System Statistics
+    description: >
+      Get system statistics including chapter counts, concept counts,
+      expert counts, and embedding store stats.
+    usage: |
+      Check the current state of the MLSysEng MoE system.
+    examples:
+      - "get-stats()"
+
+platforms:
+  openclaw:
+    skill_path: "~/.openclaw/workspace/skills/mlsyseng"
+    skill_file: "SKILL.md"
+    config_path: "~/.openclaw/openclaw.json"
+    config_key: "mcpServers"
+
+  claude_desktop:
+    config_path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+    config_key: "mcpServers"
+
+  cursor:
+    skill_path: "~/.cursor/skills/mlsyseng"
+    skill_file: "SKILL.md"
+
+  gemini:
+    config_path: "~/.gemini/mcp_config.json"
+    config_key: "mcpServers"
+
+  generic:
+    skill_path: "~/.skills/mlsyseng"
+    skill_file: "SKILL.md"
