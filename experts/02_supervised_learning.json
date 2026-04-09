@@ -1,0 +1,27 @@
+{
+  "expert_name": "02_Supervised_Learning",
+  "slug": "02_supervised_learning",
+  "capabilities": [
+    "Build and train classification models",
+    "Build and train regression models",
+    "Apply cross-validation for model evaluation",
+    "Handle bias-variance tradeoff"
+  ],
+  "skills": [
+    "~/skills/kaggle-preprocessor",
+    "~/skills/kaggle-model-trainer"
+  ],
+  "strategy": "Baseline -> EDA -> Feature Engineering -> Model Selection -> Cross-Validation -> Submit",
+  "formula": {
+    "objective": "maximize_f1_score",
+    "function": "F1 = 2 * (P * R) / (P + R)",
+    "metrics": ["accuracy", "f1_score", "precision", "recall"]
+  },
+  "loop_config": {
+    "objective": "maximize_f1_score",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 10,
+    "patience": 3
+  }
+}

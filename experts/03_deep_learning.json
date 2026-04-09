@@ -1,0 +1,28 @@
+{
+  "expert_name": "03_Deep_Learning",
+  "slug": "03_deep_learning",
+  "capabilities": [
+    "Build and train neural network architectures",
+    "Apply deep learning techniques for complex patterns",
+    "Apply transformer architectures for sequence data",
+    "Leverage pre-trained models for new tasks",
+    "Prevent overfitting with regularization strategies"
+  ],
+  "skills": [
+    "~/skills/kaggle-model-trainer",
+    "~/skills/kaggle-preprocessor"
+  ],
+  "strategy": "Baseline -> Architecture Search -> Transfer Learning -> Fine-tuning -> Ensemble -> Submit",
+  "formula": {
+    "objective": "minimize_cross_entropy",
+    "function": "CE = -sum(y * log(y_hat))",
+    "metrics": ["accuracy", "f1_score", "log_loss"]
+  },
+  "loop_config": {
+    "objective": "minimize_cross_entropy",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.0005,
+    "max_iterations": 15,
+    "patience": 4
+  }
+}

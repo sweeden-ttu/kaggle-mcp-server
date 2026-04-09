@@ -1,0 +1,27 @@
+{
+  "expert_name": "04_Feature_Engineering",
+  "slug": "04_feature_engineering",
+  "capabilities": [
+    "Create and select informative features",
+    "Apply feature selection techniques",
+    "Handle missing data and outliers",
+    "Encode categorical variables effectively",
+    "Apply dimensionality reduction"
+  ],
+  "skills": [
+    "~/skills/kaggle-preprocessor"
+  ],
+  "strategy": "EDA -> Missing Data -> Encoding -> Feature Creation -> Selection -> Validation",
+  "formula": {
+    "objective": "maximize_feature_importance",
+    "function": "I(f) = sum(gain(f, split)) / n_splits",
+    "metrics": ["mutual_information", "chi2_score", "variance_threshold"]
+  },
+  "loop_config": {
+    "objective": "maximize_feature_importance",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 10,
+    "patience": 3
+  }
+}

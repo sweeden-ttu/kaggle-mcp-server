@@ -1,13 +1,16 @@
-.PHONY: help install run-workbench run-server test clean build
+.PHONY: help install run-workbench run-server run-mlsyseng test test-mlsyseng clean build generate-skills
 
 help:
 	@echo "Available targets:"
-	@echo "  install       - Install dependencies"
-	@echo "  run-workbench - Run FOL Workbench GUI"
-	@echo "  run-server    - Run MCP Server"
-	@echo "  test          - Run tests"
-	@echo "  build         - Build package"
-	@echo "  clean         - Clean build artifacts"
+	@echo "  install         - Install dependencies"
+	@echo "  run-workbench   - Run FOL Workbench GUI"
+	@echo "  run-server      - Run Kaggle MCP Server"
+	@echo "  run-mlsyseng    - Run MLSysEng MoE MCP Server"
+	@echo "  generate-skills - Generate platform-specific skill configs"
+	@echo "  test            - Run all tests"
+	@echo "  test-mlsyseng   - Run MLSysEng MoE tests"
+	@echo "  build           - Build package"
+	@echo "  clean           - Clean build artifacts"
 
 install:
 	@echo "Installing dependencies..."
@@ -18,12 +21,24 @@ run-workbench:
 	PYTHONPATH=. venv/bin/python -m src.fol_workbench.main
 
 run-server:
-	@echo "Running MCP Server..."
+	@echo "Running Kaggle MCP Server..."
 	PYTHONPATH=. venv/bin/python -m mcp.server.fastmcp src.kaggle_mcp_server.server
+
+run-mlsyseng:
+	@echo "Running MLSysEng MoE MCP Server..."
+	PYTHONPATH=. venv/bin/python -m src.mlsyseng_mcp.server
+
+generate-skills:
+	@echo "Generating platform-specific skill configs..."
+	PYTHONPATH=. venv/bin/python skill_generator.py
 
 test:
 	@echo "Running tests..."
 	PYTHONPATH=. venv/bin/python -m pytest
+
+test-mlsyseng:
+	@echo "Running MLSysEng MoE tests..."
+	PYTHONPATH=. venv/bin/python -m pytest tests/test_mlsyseng*.py -v
 
 build:
 	@echo "Building package..."

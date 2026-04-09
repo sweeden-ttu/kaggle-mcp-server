@@ -1,0 +1,154 @@
+name: mlsyseng-moe
+version: "0.1.0"
+description: >
+  MLSysEng Mixture of Experts - extracts knowledge from ML Principles PDFs,
+  registers chapter experts with skills/strategy/formulas, and builds Kaggle
+  competition entries using RAG-informed skill selection with state convergence loops.
+
+mcp_server:
+  name: mlsyseng-moe
+  command: python
+  args:
+    - "-m"
+    - "src.mlsyseng_mcp.server"
+  env:
+    ML_PRINCIPLES_PATH: "~/ml-principles-chapters"
+    SQLITE_DB_PATH: "~/.mlsyseng/mlsyseng.db"
+    CHROMA_DB_PATH: "~/.mlsyseng/chroma_db"
+    KAGGLE_SKILLS_PATH: "~/skills"
+
+tools:
+  - name: extract-knowledge
+    description: "Extract PDFs, index chapters, create experts"
+    parameters:
+      force_reindex:
+        type: boolean
+        default: false
+        description: "Force re-extraction even if chapters already exist"
+
+  - name: evolve
+    description: "Run convergence loop for a competition"
+    parameters:
+      competition:
+        type: string
+        required: true
+        description: "Competition name/slug"
+      description:
+        type: string
+        default: ""
+        description: "Competition description"
+      epsilon:
+        type: number
+        default: 0.001
+      max_iterations:
+        type: integer
+        default: 10
+      patience:
+        type: integer
+        default: 3
+
+  - name: search-concepts
+    description: "Semantic search over ML Principles"
+    parameters:
+      query:
+        type: string
+        required: true
+      n_results:
+        type: integer
+        default: 5
+
+  - name: list-experts
+    description: "List all chapter experts"
+
+  - name: build-entry
+    description: "Build competition entry using expert knowledge"
+    parameters:
+      competition:
+        type: string
+        required: true
+      description:
+        type: string
+        default: ""
+
+  - name: run-rdagent
+    description: "Run rdagent with ML Principles context"
+    parameters:
+      competition:
+        type: string
+        required: true
+      description:
+        type: string
+        default: ""
+
+  - name: ask-expert
+    description: "Query a specific chapter expert"
+    parameters:
+      expert_slug:
+        type: string
+        required: true
+      question:
+        type: string
+        required: true
+
+  - name: get-extraction-status
+    description: "Check extraction progress"
+
+  - name: get-stats
+    description: "System statistics"
+
+platforms:
+  openclaw:
+    skill_path: "~/.openclaw/workspace/skills/mlsyseng"
+    skill_file: "SKILL.md"
+    config_path: "~/.openclaw/openclaw.json"
+
+  claude_desktop:
+    config_path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+
+  cursor:
+    skill_path: "~/.cursor/skills/mlsyseng"
+    skill_file: "SKILL.md"
+
+  gemini:
+    config_path: "~/.gemini/mcp_config.json"
+
+  generic:
+    skill_path: "~/.skills/mlsyseng"
+    skill_file: "SKILL.md"
+
+skill_content: |
+  # MLSysEng MoE - ML Systems Expert Mixture of Experts
+
+  ## Purpose
+  Extract knowledge from ML Principles PDFs, register chapter experts with
+  skills/strategy/formulas, and build Kaggle competition entries using
+  RAG-informed skill selection with state convergence loops.
+
+  ## Quick Start
+
+  1. **Extract Knowledge**: Use `extract-knowledge` to scan and index ML Principles PDFs
+  2. **List Experts**: Use `list-experts` to see available chapter experts
+  3. **Build Entry**: Use `build-entry(competition="titanic")` to create a competition plan
+  4. **Evolve**: Use `evolve(competition="titanic")` to run the convergence loop
+
+  ## When to Use
+
+  - Starting a new Kaggle competition and need ML strategy guidance
+  - Want to find relevant ML concepts for a specific problem
+  - Need expert recommendations based on competition requirements
+  - Building a systematic approach to model development
+
+  ## Expert System
+
+  Each chapter expert has:
+  - **Capabilities**: What the expert can do
+  - **Skills**: Kaggle skill paths for automation
+  - **Strategy**: Step-by-step approach (Baseline -> EDA -> Feature Eng -> Model -> Submit)
+  - **Formula**: Objective function with metrics
+
+  ## Convergence Loop
+
+  The `evolve` tool runs an iterative convergence loop:
+  - Exit condition: `||state[n] - state[n-1]||_2 < epsilon`
+  - Patience: Exits after N consecutive converging iterations
+  - Tracks expert relevance scores across iterations

@@ -1,0 +1,27 @@
+{
+  "expert_name": "05_Ensemble_Methods",
+  "slug": "05_ensemble_methods",
+  "capabilities": [
+    "Combine multiple models for improved performance",
+    "Apply bagging and boosting techniques",
+    "Build stacking and blending pipelines",
+    "Apply random forest for robust predictions"
+  ],
+  "skills": [
+    "~/skills/kaggle-model-trainer",
+    "~/skills/kaggle-preprocessor"
+  ],
+  "strategy": "Base Models -> Cross-Validation -> Stacking -> Blending -> Final Ensemble -> Submit",
+  "formula": {
+    "objective": "minimize_ensemble_error",
+    "function": "E_ens = sum(w_i * E_i) where sum(w_i) = 1",
+    "metrics": ["accuracy", "f1_score", "log_loss"]
+  },
+  "loop_config": {
+    "objective": "minimize_ensemble_error",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.0008,
+    "max_iterations": 12,
+    "patience": 3
+  }
+}
