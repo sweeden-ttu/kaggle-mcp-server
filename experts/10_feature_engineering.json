@@ -1,0 +1,29 @@
+{
+  "expert_name": "10_Feature Engineering",
+  "slug": "10_feature_engineering",
+  "chapter_id": null,
+  "capabilities": [
+    "Perform feature engineering and selection",
+    "Apply PCA and dimensionality reduction",
+    "Create interaction and polynomial features",
+    "Handle missing values and categorical encoding"
+  ],
+  "skills": [
+    "~/skills/kaggle-preprocessor",
+    "~/skills/kaggle-feature-engineer",
+    "~/skills/kaggle-eda"
+  ],
+  "strategy": "Baseline -> EDA -> Feature Engineering -> Model Selection -> Submit",
+  "formula": {
+    "objective": "minimize_validation_loss",
+    "function": "L = f(phi(X), theta) where phi = feature_transform",
+    "metrics": ["accuracy", "f1_score"]
+  },
+  "loop_config": {
+    "objective": "minimize_validation_loss",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 10,
+    "patience": 3
+  }
+}

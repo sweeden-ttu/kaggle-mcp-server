@@ -1,0 +1,29 @@
+{
+  "expert_name": "03_Deep Learning",
+  "slug": "03_deep_learning",
+  "chapter_id": null,
+  "capabilities": [
+    "Build deep learning architectures",
+    "Optimize model training with advanced optimizers",
+    "Apply regularization techniques to prevent overfitting",
+    "Implement transfer learning and fine-tuning"
+  ],
+  "skills": [
+    "~/skills/kaggle-preprocessor",
+    "~/skills/kaggle-model-trainer",
+    "~/skills/kaggle-feature-engineer"
+  ],
+  "strategy": "Baseline -> EDA -> Feature Engineering -> Model Selection -> Submit",
+  "formula": {
+    "objective": "minimize_validation_loss",
+    "function": "L = CrossEntropy(y, f(X; W)) + lambda * ||W||_2",
+    "metrics": ["accuracy", "f1_score", "auc"]
+  },
+  "loop_config": {
+    "objective": "minimize_validation_loss",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 10,
+    "patience": 3
+  }
+}

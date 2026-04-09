@@ -1,0 +1,29 @@
+{
+  "expert_name": "12_NLP",
+  "slug": "12_nlp",
+  "chapter_id": null,
+  "capabilities": [
+    "Process and model natural language data",
+    "Implement text tokenization and embeddings",
+    "Build transformer-based NLP models",
+    "Apply sentiment analysis and text classification"
+  ],
+  "skills": [
+    "~/skills/kaggle-preprocessor",
+    "~/skills/kaggle-model-trainer",
+    "~/skills/kaggle-feature-engineer"
+  ],
+  "strategy": "Baseline -> EDA -> Feature Engineering -> Model Selection -> Submit",
+  "formula": {
+    "objective": "minimize_validation_loss",
+    "function": "L = CrossEntropy(y, Transformer(tokenize(X)))",
+    "metrics": ["accuracy", "f1_score", "bleu"]
+  },
+  "loop_config": {
+    "objective": "minimize_validation_loss",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 10,
+    "patience": 3
+  }
+}

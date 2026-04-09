@@ -1,0 +1,30 @@
+{
+  "expert_name": "05_Ensemble Methods",
+  "slug": "05_ensemble_methods",
+  "chapter_id": null,
+  "capabilities": [
+    "Implement tree-based ensemble methods",
+    "Configure XGBoost, LightGBM, and CatBoost",
+    "Perform model stacking and blending",
+    "Optimize ensemble weights"
+  ],
+  "skills": [
+    "~/skills/kaggle-preprocessor",
+    "~/skills/kaggle-model-trainer",
+    "~/skills/kaggle-feature-engineer",
+    "~/skills/kaggle-eda"
+  ],
+  "strategy": "Baseline -> EDA -> Feature Engineering -> Model Selection -> Submit",
+  "formula": {
+    "objective": "minimize_validation_loss",
+    "function": "L = sum(w_i * L_i(X, theta_i))",
+    "metrics": ["accuracy", "f1_score", "log_loss"]
+  },
+  "loop_config": {
+    "objective": "minimize_validation_loss",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 10,
+    "patience": 3
+  }
+}
