@@ -1,0 +1,26 @@
+{
+  "expert_name": "09_Ensemble_Methods",
+  "slug": "09_ensemble_methods",
+  "capabilities": [
+    "Build bagging and boosting ensembles",
+    "Stack multiple model predictions",
+    "Blend diverse model outputs"
+  ],
+  "skills": [
+    "~/skills/kaggle-model-trainer",
+    "~/skills/kaggle-ensemble-builder"
+  ],
+  "strategy": "Baseline -> EDA -> Feature Engineering -> Model Selection -> Submit",
+  "formula": {
+    "objective": "minimize_ensemble_loss",
+    "function": "L = sum(w_i * L_i) subject to sum(w_i)=1",
+    "metrics": ["accuracy", "f1_score", "auc"]
+  },
+  "loop_config": {
+    "objective": "minimize_ensemble_loss",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 10,
+    "patience": 3
+  }
+}

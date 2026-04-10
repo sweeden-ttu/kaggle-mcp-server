@@ -1,0 +1,105 @@
+name: mlsyseng-moe
+version: "0.1.0"
+description: >
+  Machine Learning Systems Expert Mixture of Experts (MoE) system that extracts
+  knowledge from ML Principles PDFs, registers chapter experts, and builds
+  Kaggle competition entries using RAG-informed skill selection with state
+  convergence loops.
+
+mcp_server:
+  command: python
+  args:
+    - "-m"
+    - "mlsyseng_mcp.server"
+  env:
+    ML_PRINCIPLES_PATH: "${ML_PRINCIPLES_PATH:-~/Desktop/Machine Learning Principles - Chapters}"
+    SQLITE_DB_PATH: "${SQLITE_DB_PATH:-~/.mlsyseng/mlsyseng.db}"
+    CHROMA_DB_PATH: "${CHROMA_DB_PATH:-~/.mlsyseng/chroma_db}"
+    KAGGLE_SKILLS_PATH: "${KAGGLE_SKILLS_PATH:-~/skills}"
+
+tools:
+  - name: extract-knowledge
+    description: Extract PDFs, index chapters, create experts
+    alias: evolve
+  - name: search-concepts
+    description: Semantic search over ML Principles
+  - name: list-experts
+    description: List all chapter experts
+  - name: build-entry
+    description: Build competition entry using expert knowledge
+  - name: run-rdagent
+    description: Run rdagent with ML Principles context
+  - name: ask-expert
+    description: Query specific chapter expert
+  - name: get-extraction-status
+    description: Check extraction progress
+  - name: get-stats
+    description: System statistics
+
+skill_content: |
+  # MLSysEng MoE - ML Systems Expert Mixture of Experts
+
+  ## What This Skill Does
+  This skill provides access to a Mixture of Experts system built from
+  ML Principles knowledge. It can:
+
+  1. **Extract knowledge** from ML textbook chapters into a searchable database
+  2. **Register experts** for each chapter with skills, strategies, and formulas
+  3. **Search concepts** using semantic similarity (RAG)
+  4. **Build competition entries** by matching experts to competition requirements
+  5. **Run convergence loops** that iterate until the solution stabilizes
+
+  ## Quick Start
+
+  ### Extract and index knowledge
+  ```
+  extract-knowledge(force_reindex=false)
+  ```
+
+  ### Search for relevant ML concepts
+  ```
+  search-concepts(query="gradient boosting for classification")
+  ```
+
+  ### Build a competition entry
+  ```
+  build-entry(competition="titanic")
+  ```
+
+  ### Run the full convergence loop
+  ```
+  evolve(competition="titanic")
+  ```
+
+  ### Ask a specific expert
+  ```
+  ask-expert(expert_slug="05_deep_learning", question="How to use transformers?")
+  ```
+
+  ## Expert System
+  Each expert has:
+  - **Capabilities**: What the expert can do
+  - **Skills**: Kaggle skill references
+  - **Strategy**: Workflow pipeline (Baseline -> EDA -> Feature Eng -> Model -> Submit)
+  - **Formula**: Objective function (e.g., minimize_validation_loss)
+  - **Loop Config**: Convergence parameters (epsilon, patience, max_iterations)
+
+  ## Convergence Loop
+  The system uses an L2 norm exit condition:
+  `||state[n] - state[n-1]||_2 < epsilon`
+
+  With patience=3, the loop exits after 3 consecutive converging iterations.
+
+platforms:
+  openclaw:
+    skill_dir: "~/.openclaw/workspace/skills/mlsyseng"
+    db_dir: "~/.openclaw/workspace/mlsyseng"
+    config_file: "~/.openclaw/openclaw.json"
+  claude_desktop:
+    config_file: "~/Library/Application Support/Claude/claude_desktop_config.json"
+  cursor:
+    skill_dir: "~/.cursor/skills/mlsyseng"
+  gemini:
+    config_file: "~/.gemini/mcp_config.json"
+  generic:
+    skill_dir: "~/.skills/mlsyseng"

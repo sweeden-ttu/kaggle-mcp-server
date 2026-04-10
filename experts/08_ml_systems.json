@@ -1,0 +1,27 @@
+{
+  "expert_name": "08_ML_Systems",
+  "slug": "08_ml_systems",
+  "capabilities": [
+    "Build end-to-end ML pipelines",
+    "Systematic hyperparameter search",
+    "Production model deployment patterns"
+  ],
+  "skills": [
+    "~/skills/kaggle-preprocessor",
+    "~/skills/kaggle-model-trainer",
+    "~/skills/kaggle-submitter"
+  ],
+  "strategy": "Baseline -> EDA -> Feature Engineering -> Model Selection -> Submit",
+  "formula": {
+    "objective": "minimize_validation_loss",
+    "function": "L = f(X, theta, alpha)",
+    "metrics": ["accuracy", "f1_score", "latency"]
+  },
+  "loop_config": {
+    "objective": "minimize_validation_loss",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 10,
+    "patience": 3
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "expert_name": "05_Deep_Learning",
+  "slug": "05_deep_learning",
+  "capabilities": [
+    "Build CNN/RNN/Transformer architectures",
+    "Apply transfer learning and fine-tuning",
+    "Implement attention mechanisms"
+  ],
+  "skills": [
+    "~/skills/kaggle-deep-learning",
+    "~/skills/kaggle-model-trainer"
+  ],
+  "strategy": "Baseline -> EDA -> Feature Engineering -> Model Selection -> Submit",
+  "formula": {
+    "objective": "minimize_task_loss",
+    "function": "L = L_task + lambda * L_regularization",
+    "metrics": ["accuracy", "f1_score", "perplexity"]
+  },
+  "loop_config": {
+    "objective": "minimize_task_loss",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 10,
+    "patience": 3
+  }
+}
