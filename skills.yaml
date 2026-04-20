@@ -1,0 +1,127 @@
+# MLSysEng MoE - Skill Definitions
+# Source of truth for all platform skill configurations.
+
+name: mlsyseng-moe
+version: "0.1.0"
+description: >
+  ML Systems Expert Mixture of Experts - Extract knowledge from ML Principles PDFs,
+  register chapter experts with skills/strategy/formulas, and build Kaggle competition
+  entries using RAG-informed skill selection with state convergence loops.
+
+mcp_server:
+  command: python
+  args:
+    - "-m"
+    - "mlsyseng_moe.server"
+  env:
+    ML_PRINCIPLES_PATH: "${ML_PRINCIPLES_PATH:-~/Desktop/Machine Learning Principles - Chapters}"
+    SQLITE_DB_PATH: "${SQLITE_DB_PATH:-~/.mlsyseng/mlsyseng.db}"
+    CHROMA_DB_PATH: "${CHROMA_DB_PATH:-~/.mlsyseng/chroma_db}"
+    KAGGLE_SKILLS_PATH: "${KAGGLE_SKILLS_PATH:-}"
+
+tools:
+  - name: extract-knowledge
+    description: "Extract PDFs, index chapters, create experts"
+    parameters:
+      force_reindex:
+        type: boolean
+        default: false
+        description: "Re-extract already-processed chapters"
+
+  - name: evolve
+    description: "Run state convergence loop for a competition"
+    parameters:
+      competition:
+        type: string
+        required: true
+        description: "Kaggle competition name"
+      max_iterations:
+        type: integer
+        default: 10
+      epsilon:
+        type: number
+        default: 0.001
+
+  - name: search-concepts
+    description: "Semantic search over ML Principles"
+    parameters:
+      query:
+        type: string
+        required: true
+      n_results:
+        type: integer
+        default: 5
+
+  - name: list-experts
+    description: "List all chapter experts"
+
+  - name: build-entry
+    description: "Build competition entry using expert knowledge"
+    parameters:
+      competition:
+        type: string
+        required: true
+
+  - name: run-rdagent
+    description: "Run rdagent with ML Principles context"
+    parameters:
+      competition:
+        type: string
+        required: true
+      description:
+        type: string
+        default: ""
+
+  - name: get-extraction-status
+    description: "Check extraction progress"
+
+  - name: get-stats
+    description: "System statistics"
+
+skill_content: |
+  # MLSysEng MoE - ML Systems Expert Mixture of Experts
+
+  ## Overview
+  This skill provides access to a Mixture of Experts (MoE) system that extracts
+  knowledge from ML Principles PDFs, registers chapter experts, and builds Kaggle
+  competition entries using RAG-informed skill selection.
+
+  ## Available Tools
+
+  ### Knowledge Extraction
+  - `extract-knowledge`: Extract PDFs, index chapters, create experts
+  - `search-concepts`: Semantic search over ML Principles knowledge base
+  - `get-extraction-status`: Check current extraction progress
+  - `get-stats`: System statistics
+
+  ### Expert Management
+  - `list-experts`: List all registered chapter experts with capabilities
+  - `build-entry`: Build a competition entry using expert knowledge and RAG
+
+  ### Competition Loop
+  - `evolve`: Run the state convergence loop for iterative refinement
+  - `run-rdagent`: Prepare rdagent execution with ML Principles context
+
+  ## Workflow
+  1. Run `extract-knowledge` to index ML Principles PDFs
+  2. Use `list-experts` to see available experts
+  3. Use `build-entry` for a competition to get expert recommendations
+  4. Run `evolve` for iterative refinement with convergence checking
+
+  ## Architecture
+  - **Docling**: PDF text extraction
+  - **ChromaDB**: Vector storage for semantic search
+  - **SQLite**: Chapter, expert, and concept metadata
+  - **Convergence Loop**: L2 norm exit condition with patience
+
+platforms:
+  cursor:
+    skill_dir: "~/.cursor/skills/mlsyseng"
+    file: "SKILL.md"
+
+  claude_desktop:
+    config_path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+
+  generic:
+    skill_dir: "~/.skills/mlsyseng"
+    file: "SKILL.md"
