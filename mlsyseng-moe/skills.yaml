@@ -1,0 +1,66 @@
+name: mlsyseng-moe
+version: "0.1.0"
+description: >
+  MLSysEng Mixture of Experts - extracts knowledge from ML Principles PDFs,
+  registers chapter experts with skills/strategy/formulas, and builds Kaggle
+  competition entries using RAG-informed skill selection with state convergence loops.
+
+mcp_server:
+  name: mlsyseng-mcp
+  command: python
+  args:
+    - server.py
+  env:
+    ML_PRINCIPLES_PATH: "${ML_PRINCIPLES_PATH:-/Users/sweeden/Desktop/Machine Learning Principles - Chapters}"
+    SQLITE_DB_PATH: "${SQLITE_DB_PATH:-~/.openclaw/workspace/mlsyseng/mlsyseng.db}"
+    CHROMA_DB_PATH: "${CHROMA_DB_PATH:-~/.openclaw/workspace/mlsyseng/chroma_db}"
+    KAGGLE_SKILLS_PATH: "${KAGGLE_SKILLS_PATH:-/Users/sweeden/skills}"
+
+tools:
+  - name: extract-knowledge
+    alias: evolve
+    description: Extract PDFs, index chapters, create experts with convergence loop
+  - name: search-concepts
+    description: Semantic search over ML Principles knowledge base
+  - name: list-experts
+    description: List all registered chapter experts
+  - name: build-entry
+    description: Build Kaggle competition entry using expert knowledge
+  - name: run-rdagent
+    description: Run rdagent with ML Principles context
+  - name: get-extraction-status
+    description: Check knowledge extraction progress
+  - name: get-stats
+    description: System statistics (experts, concepts, embeddings)
+
+platforms:
+  openclaw:
+    skill_path: "~/.openclaw/workspace/skills/mlsyseng/"
+    config_path: "~/.openclaw/openclaw.json"
+    skill_file: SKILL.md
+  claude_desktop:
+    config_path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+  cursor:
+    skill_path: "~/.cursor/skills/mlsyseng/"
+    skill_file: SKILL.md
+  gemini:
+    config_path: "~/.gemini/mcp_config.json"
+  generic:
+    skill_path: "~/.skills/mlsyseng/"
+    skill_file: SKILL.md
+
+experts:
+  strategy_template: "Baseline → EDA → Feature Engineering → Model Selection → Submit"
+  loop_config:
+    exit_condition: "||state[n] - state[n-1]||_2 < epsilon"
+    epsilon: 0.001
+    max_iterations: 10
+    patience: 3
+  formula_template:
+    objective: minimize_validation_loss
+    function: "L = f(X, θ, α)"
+    metrics:
+      - accuracy
+      - f1_score
+      - rmse
+      - auc
