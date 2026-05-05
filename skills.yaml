@@ -1,0 +1,95 @@
+# MLSysEng MoE Skills - Source of Truth
+# This file defines all skills that get generated for each platform.
+
+metadata:
+  name: "mlsyseng-moe"
+  version: "0.1.0"
+  description: "Mixture of Experts system for ML Principles knowledge extraction and Kaggle competition entries"
+
+mcp_server:
+  command: "python"
+  args: ["-m", "mlsyseng_mcp.server"]
+  env:
+    ML_PRINCIPLES_PATH: "${ML_PRINCIPLES_PATH}"
+    SQLITE_DB_PATH: "${SQLITE_DB_PATH}"
+    CHROMA_DB_PATH: "${CHROMA_DB_PATH}"
+    KAGGLE_SKILLS_PATH: "${KAGGLE_SKILLS_PATH}"
+
+skills:
+  extract_knowledge:
+    name: "Extract Knowledge"
+    description: "Extract PDFs, index chapters, create experts from ML Principles"
+    when_to_use: >
+      Use when you need to build the knowledge base from ML Principles PDFs.
+      This scans chapter folders, extracts content using docling, generates
+      embeddings for semantic search, and registers chapter experts.
+    tools:
+      - extract-knowledge
+      - evolve
+    examples:
+      - "Index all ML Principles chapters"
+      - "Re-extract knowledge from PDFs"
+
+  search_concepts:
+    name: "Search ML Concepts"
+    description: "Semantic search over extracted ML Principles knowledge"
+    when_to_use: >
+      Use when looking for specific ML concepts, techniques, or principles
+      from the indexed knowledge base. Supports natural language queries.
+    tools:
+      - search-concepts
+    examples:
+      - "Find information about neural network optimization"
+      - "Search for ensemble methods"
+
+  expert_system:
+    name: "Expert System"
+    description: "Query and manage ML chapter experts"
+    when_to_use: >
+      Use when you need to list available experts, query a specific expert,
+      or understand which expert covers a particular ML topic.
+    tools:
+      - list-experts
+      - ask_expert
+    examples:
+      - "List all available experts"
+      - "Ask the deep learning expert about CNNs"
+
+  competition_entry:
+    name: "Competition Entry Builder"
+    description: "Build Kaggle competition entries using expert knowledge"
+    when_to_use: >
+      Use when starting a new Kaggle competition. This selects the most
+      relevant experts, infers required skills, and generates an entry plan
+      with strategy, formulas, and convergence loop configuration.
+    tools:
+      - build-entry
+      - run-rdagent
+    examples:
+      - "Build an entry for the Titanic competition"
+      - "Prepare for an image classification competition"
+
+  convergence_loop:
+    name: "Convergence Loop"
+    description: "Run iterative refinement with state convergence"
+    when_to_use: >
+      Use when you want to iteratively refine a competition entry until
+      the state vector converges. Uses L2 norm exit condition with patience.
+    tools:
+      - evolve
+    examples:
+      - "Evolve a solution for the Titanic competition"
+      - "Run convergence loop until epsilon"
+
+  system_status:
+    name: "System Status"
+    description: "Check extraction progress and system statistics"
+    when_to_use: >
+      Use to monitor the system's state: how many chapters are extracted,
+      how many experts are registered, embedding store size, etc.
+    tools:
+      - get-extraction-status
+      - get-stats
+    examples:
+      - "Check extraction progress"
+      - "Show system stats"
