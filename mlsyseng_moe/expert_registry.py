@@ -200,7 +200,7 @@ def create_expert_from_chapter(
 def _match_template(title: str, concepts: list[dict]) -> dict:
     """Match a chapter to the best expert template."""
     title_lower = title.lower()
-    concept_names = [c["name"].lower() for c in concepts]
+    concept_names = [c.get("name", c.get("concept_name", "")).lower() for c in concepts]
     all_text = f"{title_lower} {' '.join(concept_names)}"
 
     best_match = ""
@@ -243,7 +243,7 @@ def _infer_metrics(concepts: list[dict]) -> list[str]:
 
     metrics = set()
     for concept in concepts:
-        name = concept.get("name", "").lower()
+        name = concept.get("name", concept.get("concept_name", "")).lower()
         for keyword, metric in metric_map.items():
             if keyword in name:
                 metrics.add(metric)

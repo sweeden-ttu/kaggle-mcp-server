@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 mcp = FastMCP(
     "mlsyseng-moe",
-    description="ML Systems Engineering Mixture of Experts - Knowledge extraction, expert routing, and competition entry building",
+    instructions="ML Systems Engineering Mixture of Experts - Knowledge extraction, expert routing, and competition entry building",
 )
 
 DB_PATH = os.environ.get(

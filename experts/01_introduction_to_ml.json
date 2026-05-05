@@ -1,0 +1,30 @@
+{
+  "expert_name": "01_Introduction to ML",
+  "slug": "01_introduction_to_ml",
+  "capabilities": [
+    "Gradient-based optimization",
+    "Learning rate scheduling",
+    "Convergence analysis",
+    "Hyperparameter optimization"
+  ],
+  "skills": [
+    "/root/skills/kaggle-optimizer",
+    "/root/skills/kaggle-hyperparameter-tuner"
+  ],
+  "strategy": "Grid Search \u2192 Bayesian Optimization \u2192 Learning Rate Finder \u2192 Early Stopping",
+  "formula": {
+    "objective": "minimize_generalization_error",
+    "function": "\u03b8* = argmin_\u03b8 E[L(f(x;\u03b8), y)]",
+    "metrics": [
+      "accuracy",
+      "f1_score"
+    ]
+  },
+  "loop_config": {
+    "objective": "minimize_validation_loss",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 10,
+    "patience": 3
+  }
+}
