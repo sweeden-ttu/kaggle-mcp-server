@@ -7,7 +7,7 @@ and embedding metadata.
 import json
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -102,7 +102,7 @@ class MoEDatabase:
         pdf_path: str = "",
         metadata: Optional[Dict] = None,
     ):
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         self.conn.execute(
             """
             INSERT INTO chapters (chapter_id, folder_name, title, content_md, pdf_path, extracted_at, metadata)
@@ -138,7 +138,7 @@ class MoEDatabase:
     # ── Expert CRUD ─────────────────────────────────────────────────
 
     def upsert_expert(self, expert: Dict[str, Any]):
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         self.conn.execute(
             """
             INSERT INTO experts
@@ -212,7 +212,7 @@ class MoEDatabase:
     def set_extraction_status(
         self, chapter_id: str, status: str, progress: float = 0.0, error: str = ""
     ):
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         started = now if status == "running" else None
         finished = now if status in ("done", "error") else None
         self.conn.execute(
@@ -292,7 +292,7 @@ class MoEDatabase:
                 json.dumps(state_vector),
                 l2_norm,
                 1 if converged else 0,
-                datetime.utcnow().isoformat(),
+                datetime.now(timezone.utc).isoformat(),
             ),
         )
         self.conn.commit()
