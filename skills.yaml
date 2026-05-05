@@ -1,0 +1,77 @@
+# MLSysEng MoE - Skills Definition
+# Source of truth for all platform-specific skill configurations.
+
+name: mlsyseng-moe
+description: >
+  Mixture of Experts system that extracts knowledge from ML Principles PDFs,
+  registers chapter experts with skills/strategy/formulas, and builds Kaggle
+  competition entries using RAG-informed skill selection with state convergence loops.
+
+version: "1.0.0"
+
+mcp_server:
+  command: python
+  args: ["-m", "src.mlsyseng_moe.server"]
+  env:
+    ML_PRINCIPLES_PATH: "${HOME}/Desktop/Machine Learning Principles - Chapters"
+    SQLITE_DB_PATH: "${HOME}/.mlsyseng/mlsyseng.db"
+    CHROMA_DB_PATH: "${HOME}/.mlsyseng/chroma_db"
+    KAGGLE_SKILLS_PATH: "${HOME}/skills"
+
+tools:
+  - name: extract-knowledge
+    alias: evolve
+    description: Extract PDFs, index chapters, create experts
+  - name: search-concepts
+    description: Semantic search over ML Principles
+  - name: list-experts
+    description: List all chapter experts
+  - name: build-entry
+    description: Build competition entry using expert knowledge
+  - name: run-rdagent
+    description: Run rdagent with ML Principles context
+  - name: ask-expert
+    description: Query specific chapter expert
+  - name: get-extraction-status
+    description: Check extraction progress
+  - name: get-stats
+    description: System statistics
+
+platforms:
+  claude_code:
+    skill_dir: "~/.claude/skills/mlsyseng"
+    config_file: null
+  claude_desktop:
+    config_file: "~/Library/Application Support/Claude/claude_desktop_config.json"
+  cursor:
+    skill_dir: "~/.cursor/skills/mlsyseng"
+  gemini:
+    config_file: "~/.gemini/mcp_config.json"
+  generic:
+    skill_dir: "~/.skills/mlsyseng"
+
+skill_content: |
+  # MLSysEng MoE - Mixture of Experts
+
+  A Mixture of Experts system for ML knowledge extraction and Kaggle competition guidance.
+
+  ## Quick Start
+
+  1. **Extract Knowledge**: `extract-knowledge` — scans ML Principles PDFs, creates experts
+  2. **List Experts**: `list-experts` — shows all registered chapter experts
+  3. **Search**: `search-concepts query="neural network optimization"` — semantic search
+  4. **Build Entry**: `build-entry competition="titanic"` — builds a competition plan
+  5. **Evolve**: `evolve competition="titanic"` — runs convergence loop
+
+  ## Expert System
+
+  Each chapter becomes an expert with:
+  - **Capabilities**: What the expert can do
+  - **Skills**: Kaggle skill paths it recommends
+  - **Strategy**: Step-by-step approach (Baseline → EDA → Feature Eng → Model → Submit)
+  - **Formula**: Objective function and metrics
+  - **Loop Config**: Convergence parameters (ε, max_iterations, patience)
+
+  ## Convergence Loop
+
+  Exit condition: `||state[n] - state[n-1]||_2 < epsilon`
