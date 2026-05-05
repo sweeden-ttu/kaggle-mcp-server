@@ -55,3 +55,9 @@ dmypy.json
 .cursor/
 *.db
 *.sqlite
+
+# Installers
+Miniforge3-*.sh
+
+# MLSysEng data
+chroma_db/
