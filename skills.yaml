@@ -1,0 +1,96 @@
+# MLSysEng MoE - Skills Configuration
+# Source of truth for all platform skill definitions
+# Run `python skill_generator.py` to install skills to all platforms
+
+name: mlsyseng-moe
+version: "0.1.0"
+description: >
+  Mixture of Experts system that extracts knowledge from ML Principles PDFs,
+  registers chapter experts with skills/strategy/formulas, and builds Kaggle
+  competition entries using RAG-informed skill selection with state convergence loops.
+
+mcp_server:
+  command: python
+  args: ["-m", "mlsyseng_mcp.server"]
+  env:
+    ML_PRINCIPLES_PATH: "${ML_PRINCIPLES_PATH:-~/Desktop/Machine Learning Principles - Chapters}"
+    SQLITE_DB_PATH: "${SQLITE_DB_PATH:-~/.mlsyseng/mlsyseng.db}"
+    CHROMA_DB_PATH: "${CHROMA_DB_PATH:-~/.mlsyseng/chroma_db}"
+    KAGGLE_SKILLS_PATH: "${KAGGLE_SKILLS_PATH:-~/skills}"
+
+tools:
+  - name: extract-knowledge
+    description: Extract PDFs, index chapters, create experts
+    alias: evolve
+
+  - name: search-concepts
+    description: Semantic search over ML Principles
+
+  - name: list-experts
+    description: List all chapter experts
+
+  - name: ask-expert
+    description: Query a specific chapter expert
+
+  - name: build-entry
+    description: Build competition entry using expert knowledge
+
+  - name: run-rdagent
+    description: Run rdagent with ML Principles context
+
+  - name: get-extraction-status
+    description: Check extraction progress
+
+  - name: get-stats
+    description: System statistics
+
+skill:
+  name: MLSysEng MoE Expert System
+  trigger_patterns:
+    - "mixture of experts"
+    - "ml principles"
+    - "kaggle competition"
+    - "build entry"
+    - "extract knowledge"
+    - "convergence loop"
+    - "expert system"
+  instructions: |
+    You are the MLSysEng Mixture of Experts system. You help users:
+
+    1. **Extract Knowledge**: Use `extract-knowledge` to scan ML Principles
+       PDF chapters and build the expert database.
+
+    2. **Search**: Use `search-concepts` for semantic search over extracted
+       ML knowledge.
+
+    3. **Expert System**: Use `list-experts` to see available experts, and
+       `ask-expert` to query specific chapter experts.
+
+    4. **Competition Entries**: Use `build-entry` to create Kaggle competition
+       strategies combining expert recommendations.
+
+    5. **Convergence Loop**: Use `evolve` to run the state convergence loop
+       that iterates expert-guided optimisation until ||state[n] - state[n-1]||_2 < epsilon.
+
+    Workflow:
+    - First run `extract-knowledge` if no experts exist
+    - Use `list-experts` to see what's available
+    - For a competition, use `build-entry(competition="name")`
+    - Run `evolve(competition="name")` to iterate until convergence
+
+platforms:
+  openclaw:
+    skill_path: "~/.openclaw/workspace/skills/mlsyseng/"
+    config_file: "~/.openclaw/openclaw.json"
+
+  claude_desktop:
+    config_file: "~/Library/Application Support/Claude/claude_desktop_config.json"
+
+  cursor:
+    skill_path: "~/.cursor/skills/mlsyseng/"
+
+  gemini:
+    config_file: "~/.gemini/mcp_config.json"
+
+  generic:
+    skill_path: "~/.skills/mlsyseng/"

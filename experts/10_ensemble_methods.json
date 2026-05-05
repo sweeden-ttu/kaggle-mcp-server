@@ -1,0 +1,28 @@
+{
+  "expert_name": "10_Ensemble Methods",
+  "slug": "10_ensemble_methods",
+  "capabilities": [
+    "Build ensemble models for improved accuracy",
+    "Build baseline models quickly",
+    "Systematic hyperparameter search",
+    "Advanced feature engineering and selection"
+  ],
+  "skills": [
+    "~/skills/kaggle-ensemble-builder",
+    "~/skills/kaggle-model-trainer",
+    "~/skills/kaggle-hyperparameter-tuner"
+  ],
+  "strategy": "Baseline \u2192 Bagging \u2192 Boosting \u2192 Stacking \u2192 Blending \u2192 Submit",
+  "formula": {
+    "objective": "maximize_ensemble_accuracy",
+    "function": "H(x) = sign(\u03a3 \u03b1_t h_t(x))",
+    "metrics": ["accuracy", "f1_score", "log_loss"]
+  },
+  "loop_config": {
+    "objective": "minimize_validation_loss",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.0005,
+    "max_iterations": 12,
+    "patience": 4
+  }
+}

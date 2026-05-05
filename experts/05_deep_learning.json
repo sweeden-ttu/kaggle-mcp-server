@@ -1,0 +1,28 @@
+{
+  "expert_name": "05_Deep Learning",
+  "slug": "05_deep_learning",
+  "capabilities": [
+    "Build baseline models quickly",
+    "Design and train deep neural networks",
+    "Apply regularization to prevent overfitting",
+    "Optimization algorithm selection and tuning"
+  ],
+  "skills": [
+    "~/skills/kaggle-deep-learning",
+    "~/skills/kaggle-model-trainer",
+    "~/skills/kaggle-optimizer"
+  ],
+  "strategy": "Baseline \u2192 Architecture Search \u2192 Regularization \u2192 Learning Rate Schedule \u2192 Submit",
+  "formula": {
+    "objective": "minimize_cross_entropy",
+    "function": "L = -\u03a3(y_i log(\u0177_i) + (1-y_i)log(1-\u0177_i))",
+    "metrics": ["accuracy", "f1_score", "auc_roc"]
+  },
+  "loop_config": {
+    "objective": "minimize_validation_loss",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 15,
+    "patience": 3
+  }
+}
