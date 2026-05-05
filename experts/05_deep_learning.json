@@ -1,0 +1,29 @@
+{
+  "expert_id": "expert_05_deep_learning",
+  "chapter_id": "ch_05_dl",
+  "expert_name": "05_Deep Learning",
+  "slug": "05_deep_learning",
+  "capabilities": [
+    "Deep learning model architecture design",
+    "Build baseline models quickly",
+    "Systematic hyperparameter search"
+  ],
+  "skills": [
+    "~/skills/kaggle-model-trainer",
+    "~/skills/kaggle-nn-builder",
+    "~/skills/kaggle-hypertuner"
+  ],
+  "strategy": "Baseline → Architecture Search → Training → Regularization → Ensemble → Submit",
+  "formula": {
+    "objective": "minimize_cross_entropy_loss",
+    "function": "L = -Σ y_i log(ŷ_i)",
+    "metrics": ["accuracy", "f1_score", "auc"]
+  },
+  "loop_config": {
+    "objective": "minimize_cross_entropy_loss",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.0005,
+    "max_iterations": 15,
+    "patience": 4
+  }
+}

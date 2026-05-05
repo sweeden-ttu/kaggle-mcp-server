@@ -1,0 +1,30 @@
+{
+  "expert_id": "expert_03_ensemble_methods",
+  "chapter_id": "ch_03_ensemble",
+  "expert_name": "03_Ensemble Methods",
+  "slug": "03_ensemble_methods",
+  "capabilities": [
+    "Ensemble and stacking strategies",
+    "Build baseline models quickly",
+    "Robust cross-validation schemes"
+  ],
+  "skills": [
+    "~/skills/kaggle-preprocessor",
+    "~/skills/kaggle-model-trainer",
+    "~/skills/kaggle-ensemble-builder",
+    "~/skills/kaggle-cv-evaluator"
+  ],
+  "strategy": "Baseline → Train Diverse Models → Stacking → Blending → Submit",
+  "formula": {
+    "objective": "minimize_ensemble_loss",
+    "function": "L = Σ w_i L_i(X, θ_i)",
+    "metrics": ["accuracy", "f1_score", "log_loss"]
+  },
+  "loop_config": {
+    "objective": "minimize_ensemble_loss",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 12,
+    "patience": 3
+  }
+}
