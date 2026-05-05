@@ -17,3 +17,9 @@ opencv-python>=4.8.0
 numpy>=1.24.0
 scipy>=1.11.0
 mss>=9.0.0
+# MLSysEng MoE dependencies
+chromadb>=0.4.0
+sentence-transformers>=2.2.0
+docling>=2.0.0
+pdfplumber>=0.10.0
+PyYAML>=6.0

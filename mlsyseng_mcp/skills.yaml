@@ -1,0 +1,128 @@
+# MLSysEng MoE Skills Configuration
+# Source of truth for all platform skill installations
+
+name: mlsyseng-moe
+version: "0.1.0"
+description: >
+  Mixture of Experts system that extracts knowledge from ML Principles PDFs,
+  registers chapter experts with skills/strategy/formulas, and builds Kaggle
+  competition entries using RAG-informed skill selection with state convergence loops.
+
+mcp_server:
+  name: mlsyseng-moe
+  command: python
+  args:
+    - "-m"
+    - "mlsyseng_mcp.server"
+  env:
+    ML_PRINCIPLES_PATH: "${ML_PRINCIPLES_PATH:-~/Desktop/Machine Learning Principles - Chapters}"
+    SQLITE_DB_PATH: "${SQLITE_DB_PATH:-~/.mlsyseng/mlsyseng.db}"
+    CHROMA_DB_PATH: "${CHROMA_DB_PATH:-~/.mlsyseng/chroma_db}"
+    KAGGLE_SKILLS_PATH: "${KAGGLE_SKILLS_PATH:-~/skills}"
+
+tools:
+  - name: extract-knowledge
+    description: "Extract PDFs, index chapters, create experts"
+    usage: "extract-knowledge(force_reindex=false)"
+
+  - name: evolve
+    description: "Run convergence loop for a competition"
+    usage: "evolve(competition='titanic', max_iterations=10, epsilon=0.001)"
+
+  - name: search-concepts
+    description: "Semantic search over ML Principles"
+    usage: "search-concepts(query='neural network optimization', n_results=10)"
+
+  - name: list-experts
+    description: "List all chapter experts"
+    usage: "list-experts()"
+
+  - name: build-entry
+    description: "Build competition entry using expert knowledge"
+    usage: "build-entry(competition='titanic')"
+
+  - name: run-rdagent
+    description: "Run rdagent with ML Principles context"
+    usage: "run-rdagent(competition='titanic', description='Predict survival')"
+
+  - name: ask-expert
+    description: "Query a specific chapter expert"
+    usage: "ask-expert(expert_slug='08_ml_systems', question='How to optimize?')"
+
+  - name: get-extraction-status
+    description: "Check extraction progress"
+    usage: "get-extraction-status()"
+
+  - name: get-stats
+    description: "System statistics"
+    usage: "get-stats()"
+
+skill_content: |
+  # MLSysEng MoE - ML Systems Expert Mixture of Experts
+
+  ## Overview
+  A Mixture of Experts (MoE) system that:
+  1. Extracts knowledge from ML Principles PDF chapters using docling
+  2. Registers chapter experts with capabilities, skills, and strategies
+  3. Builds Kaggle competition entries using RAG-informed expert selection
+  4. Runs state convergence loops until ||state[n] - state[n-1]||_2 < epsilon
+
+  ## Quick Start
+
+  ### 1. Extract Knowledge
+  ```
+  extract-knowledge(force_reindex=false)
+  ```
+  Scans PDF chapters, extracts content, generates embeddings, creates experts.
+
+  ### 2. List Experts
+  ```
+  list-experts()
+  ```
+  Shows all registered experts with their capabilities and skills.
+
+  ### 3. Build Entry
+  ```
+  build-entry(competition="titanic")
+  ```
+  Selects relevant experts and builds a competition pipeline.
+
+  ### 4. Evolve
+  ```
+  evolve(competition="titanic")
+  ```
+  Runs the convergence loop, iteratively refining the solution.
+
+  ## Expert Structure
+  Each expert has:
+  - **capabilities**: What the expert can do
+  - **skills**: Kaggle skill paths to apply
+  - **strategy**: Pipeline strategy (Baseline → EDA → Feature Eng → Model → Submit)
+  - **formula**: Mathematical objective function
+  - **loop_config**: Convergence parameters (epsilon, max_iterations, patience)
+
+  ## Convergence Loop
+  The system iterates until state convergence:
+  - Exit: ||state[n] - state[n-1]||_2 < epsilon
+  - Default epsilon: 0.001
+  - Default patience: 3 consecutive converging iterations
+
+platforms:
+  openclaw:
+    skill_dir: "~/.openclaw/workspace/skills/mlsyseng"
+    skill_file: "SKILL.md"
+    config_path: "~/.openclaw/openclaw.json"
+
+  claude_desktop:
+    config_path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+
+  cursor:
+    skill_dir: "~/.cursor/skills/mlsyseng"
+    skill_file: "SKILL.md"
+
+  gemini:
+    config_path: "~/.gemini/mcp_config.json"
+
+  generic:
+    skill_dir: "~/.skills/mlsyseng"
+    skill_file: "SKILL.md"

@@ -1,0 +1,27 @@
+{
+  "expert_name": "09_Deep Learning",
+  "slug": "09_deep_learning",
+  "capabilities": [
+    "Train deep neural networks with error backpropagation",
+    "Apply deep learning to complex problems",
+    "Implement attention-based transformer models",
+    "Design and select appropriate loss functions"
+  ],
+  "skills": [
+    "~/skills/kaggle-neural-net",
+    "~/skills/kaggle-model-trainer"
+  ],
+  "strategy": "Baseline → EDA → Feature Engineering → Model Selection → Submit",
+  "formula": {
+    "objective": "minimize_loss",
+    "function": "L = (1/n) * Σ loss(f(x_i; θ), y_i) + λ * R(θ)",
+    "metrics": ["loss", "gradient_norm"]
+  },
+  "loop_config": {
+    "objective": "minimize_loss",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 10,
+    "patience": 3
+  }
+}
