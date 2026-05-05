@@ -1,0 +1,134 @@
+# MLSysEng MoE - Skills Definition
+# Source of truth for all platform-specific skill configurations.
+# Run `python skill_generator.py` to generate configs for each platform.
+
+name: mlsyseng-moe
+version: "0.1.0"
+description: >
+  Machine Learning Systems Expert Mixture of Experts.
+  Extracts knowledge from ML Principles PDFs, registers chapter experts,
+  and builds Kaggle competition entries using RAG-informed skill selection
+  with state convergence loops.
+
+server:
+  command: python
+  args: ["-m", "mlsyseng_moe.server"]
+  env:
+    ML_PRINCIPLES_PATH: "${ML_PRINCIPLES_PATH:-~/Desktop/Machine Learning Principles - Chapters}"
+    SQLITE_DB_PATH: "${SQLITE_DB_PATH:-~/.openclaw/workspace/mlsyseng/mlsyseng.db}"
+    CHROMA_DB_PATH: "${CHROMA_DB_PATH:-~/.openclaw/workspace/mlsyseng/chroma_db}"
+    KAGGLE_SKILLS_PATH: "${KAGGLE_SKILLS_PATH:-~/skills}"
+
+tools:
+  - name: extract-knowledge
+    alias: evolve
+    description: >
+      Extract PDFs, index chapters, create experts.
+      Scans ML Principles chapter folders, extracts PDF content,
+      generates embeddings, and creates expert definitions.
+    parameters:
+      force_reindex:
+        type: boolean
+        default: false
+        description: Force re-extraction of all chapters
+
+  - name: search-concepts
+    description: >
+      Semantic search over ML Principles knowledge base.
+      Returns relevant passages with chapter attribution.
+    parameters:
+      query:
+        type: string
+        required: true
+        description: Search query for ML concepts
+      n_results:
+        type: integer
+        default: 5
+        description: Number of results to return
+
+  - name: list-experts
+    description: List all registered chapter experts with capabilities and strategies.
+
+  - name: build-entry
+    description: >
+      Build competition entry using expert knowledge and RAG-informed skill selection.
+      Identifies relevant experts and generates a structured approach.
+    parameters:
+      competition:
+        type: string
+        default: titanic
+        description: Kaggle competition name or slug
+
+  - name: run-rdagent
+    description: >
+      Run rdagent with ML Principles context for a Kaggle competition.
+      Generates context and prepares the rdagent command.
+    parameters:
+      competition:
+        type: string
+        default: titanic
+        description: Competition name
+      description:
+        type: string
+        default: ""
+        description: Competition description for context
+
+  - name: get-extraction-status
+    description: Check extraction progress and indexed chapter status.
+
+  - name: get-stats
+    description: System statistics including chapter, concept, and expert counts.
+
+skill:
+  name: MLSysEng MoE Expert System
+  trigger_phrases:
+    - "extract ML knowledge"
+    - "build competition entry"
+    - "list ML experts"
+    - "search ML principles"
+    - "run convergence loop"
+    - "evolve competition"
+  instructions: |
+    You are the MLSysEng Mixture of Experts system. Your role is to:
+
+    1. **Extract Knowledge**: Use `extract-knowledge` to scan ML Principles PDFs,
+       extract content with docling, generate embeddings, and create expert definitions.
+
+    2. **Search Concepts**: Use `search-concepts` to find relevant ML principles
+       for any query using semantic search over the indexed knowledge base.
+
+    3. **Expert Selection**: Use `list-experts` to see available chapter experts,
+       each with specialized capabilities, strategies, and mathematical formulas.
+
+    4. **Build Entries**: Use `build-entry` to create Kaggle competition entries
+       informed by ML Principles knowledge and expert strategies.
+
+    5. **Convergence Loop**: Use `evolve` to run the state convergence loop,
+       which iterates experts until ||state[n] - state[n-1]||_2 < epsilon.
+
+    ## Expert Architecture
+    Each expert has:
+    - **Capabilities**: What they can do (e.g., "Build baseline models quickly")
+    - **Skills**: Kaggle skill paths they recommend
+    - **Strategy**: Approach pattern (e.g., "Baseline → Feature Eng → Model → Submit")
+    - **Formula**: Objective function (e.g., minimize_validation_loss)
+    - **Loop Config**: Convergence parameters (epsilon, patience, max_iterations)
+
+    ## Workflow
+    1. Run `extract-knowledge` to index all chapters
+    2. Use `search-concepts` to find relevant techniques
+    3. Use `build-entry` to create a competition approach
+    4. Run `evolve` to iterate and converge on optimal strategy
+
+platforms:
+  openclaw:
+    skill_path: "~/.openclaw/workspace/skills/mlsyseng/"
+    config_path: "~/.openclaw/openclaw.json"
+  claude_desktop:
+    config_path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+  cursor:
+    skill_path: "~/.cursor/skills/mlsyseng/"
+  gemini:
+    config_path: "~/.gemini/mcp_config.json"
+  generic:
+    skill_path: "~/.skills/mlsyseng/"
