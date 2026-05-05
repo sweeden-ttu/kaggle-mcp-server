@@ -1,0 +1,82 @@
+# MLSysEng MoE - Skills Definition (Source of Truth)
+# This file defines skills for all supported AI platforms.
+
+name: mlsyseng-moe
+version: "0.1.0"
+description: >
+  Mixture of Experts system that extracts knowledge from ML Principles PDFs,
+  registers chapter experts with skills/strategy/formulas, and builds Kaggle
+  competition entries using RAG-informed skill selection with state convergence loops.
+
+mcp_server:
+  command: python
+  args:
+    - -m
+    - mlsyseng_mcp.server
+  env:
+    ML_PRINCIPLES_PATH: "${ML_PRINCIPLES_PATH:-~/Desktop/Machine Learning Principles - Chapters}"
+    SQLITE_DB_PATH: "${SQLITE_DB_PATH:-~/.openclaw/workspace/mlsyseng/mlsyseng.db}"
+    CHROMA_DB_PATH: "${CHROMA_DB_PATH:-~/.openclaw/workspace/mlsyseng/chroma_db}"
+    KAGGLE_SKILLS_PATH: "${KAGGLE_SKILLS_PATH:-~/skills}"
+
+skill:
+  name: MLSysEng MoE Expert
+  description: >
+    Machine Learning Systems Expert that leverages a Mixture of Experts architecture
+    to provide ML guidance. Extracts knowledge from ML Principles chapters, performs
+    semantic search, selects relevant experts for Kaggle competitions, and runs
+    state convergence loops for iterative improvement.
+
+  instructions: |
+    You are the MLSysEng Mixture of Experts system. You have access to ML Principles
+    chapter knowledge via semantic search and can deploy chapter experts for Kaggle
+    competitions.
+
+    ## Workflow
+    1. **Extract Knowledge**: Use `extract-knowledge` to index ML Principles PDFs
+    2. **Search Concepts**: Use `search-concepts` for semantic search over ML knowledge
+    3. **List Experts**: Use `list-experts` to see available chapter experts
+    4. **Build Entry**: Use `build-entry` to create a competition plan using expert knowledge
+    5. **Evolve**: Use `evolve` to run the state convergence loop for iterative improvement
+    6. **Ask Expert**: Use `ask_expert` to query a specific chapter expert
+
+    ## Expert Selection
+    Experts are selected via RAG (semantic similarity) to match the competition topic.
+    Each expert brings domain-specific capabilities, skills, and strategies.
+
+    ## Convergence Loop
+    The `evolve` tool runs a convergence loop where:
+    - Each iteration applies expert strategies and measures metrics
+    - Exit condition: ||state[n] - state[n-1]||_2 < epsilon
+    - Default epsilon: 0.001, patience: 3 consecutive converging iterations
+
+  tools:
+    - extract-knowledge
+    - evolve
+    - search-concepts
+    - list-experts
+    - ask_expert
+    - build-entry
+    - run-rdagent
+    - get-extraction-status
+    - get-stats
+
+platforms:
+  openclaw:
+    skill_path: "~/.openclaw/workspace/skills/mlsyseng/"
+    config_path: "~/.openclaw/openclaw.json"
+    config_key: "mcpServers"
+
+  claude_desktop:
+    config_path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+    config_key: "mcpServers"
+
+  cursor:
+    skill_path: "~/.cursor/skills/mlsyseng/"
+
+  gemini:
+    config_path: "~/.gemini/mcp_config.json"
+    config_key: "mcpServers"
+
+  generic:
+    skill_path: "~/.skills/mlsyseng/"

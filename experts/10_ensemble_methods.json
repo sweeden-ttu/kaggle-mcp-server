@@ -1,0 +1,29 @@
+{
+  "expert_name": "10_Ensemble Methods",
+  "slug": "10_ensemble_methods",
+  "chapter_num": 10,
+  "capabilities": [
+    "Expert knowledge in Ensemble Methods",
+    "Ensemble model construction and stacking",
+    "Robust cross-validation schemes",
+    "Build baseline models quickly"
+  ],
+  "skills": [
+    "~/skills/kaggle-ensemble-builder",
+    "~/skills/kaggle-model-trainer",
+    "~/skills/kaggle-cv-validator"
+  ],
+  "strategy": "Train Base Models \u2192 Stacking \u2192 Blending \u2192 Validation \u2192 Submit",
+  "formula": {
+    "objective": "minimize_ensemble_loss",
+    "function": "L_ens = \u03a3 w_i \u00b7 L_i(X, \u03b8_i)",
+    "metrics": ["accuracy", "f1_score", "ensemble_diversity"]
+  },
+  "loop_config": {
+    "objective": "minimize_ensemble_loss",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 12,
+    "patience": 3
+  }
+}

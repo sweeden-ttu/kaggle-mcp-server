@@ -1,0 +1,29 @@
+{
+  "expert_name": "03_Feature Engineering",
+  "slug": "03_feature_engineering",
+  "chapter_num": 3,
+  "capabilities": [
+    "Expert knowledge in Feature Engineering",
+    "Advanced feature engineering and selection",
+    "Data preprocessing and cleaning pipelines",
+    "Build baseline models quickly"
+  ],
+  "skills": [
+    "~/skills/kaggle-preprocessor",
+    "~/skills/kaggle-feature-engineer",
+    "~/skills/kaggle-model-trainer"
+  ],
+  "strategy": "EDA \u2192 Feature Discovery \u2192 Feature Selection \u2192 Validation \u2192 Submit",
+  "formula": {
+    "objective": "maximize_feature_importance",
+    "function": "I(f) = \u0394L(model_with_f) - \u0394L(model_without_f)",
+    "metrics": ["feature_importance", "mutual_information", "correlation"]
+  },
+  "loop_config": {
+    "objective": "maximize_feature_importance",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.0005,
+    "max_iterations": 20,
+    "patience": 5
+  }
+}

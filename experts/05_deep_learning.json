@@ -1,0 +1,30 @@
+{
+  "expert_name": "05_Deep Learning",
+  "slug": "05_deep_learning",
+  "chapter_num": 5,
+  "capabilities": [
+    "Expert knowledge in Deep Learning",
+    "Build and train neural network architectures",
+    "Deep learning model design and training",
+    "Regularization strategy selection",
+    "Build baseline models quickly"
+  ],
+  "skills": [
+    "~/skills/kaggle-deep-learning",
+    "~/skills/kaggle-model-trainer",
+    "~/skills/kaggle-regularizer"
+  ],
+  "strategy": "Baseline \u2192 Architecture Search \u2192 Hyperparameter Tuning \u2192 Ensemble \u2192 Submit",
+  "formula": {
+    "objective": "minimize_cross_entropy",
+    "function": "L = -\u03a3[y\u00b7log(p) + (1-y)\u00b7log(1-p)]",
+    "metrics": ["accuracy", "f1_score", "precision", "recall"]
+  },
+  "loop_config": {
+    "objective": "minimize_cross_entropy",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 15,
+    "patience": 3
+  }
+}
