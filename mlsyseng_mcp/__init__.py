@@ -2,6 +2,11 @@
 
 __version__ = "0.1.0"
 
-from .server import main
+
+def main():
+    """Run the MLSysEng MoE MCP server."""
+    from .server import main as _main
+    _main()
+
 
 __all__ = ["main"]

@@ -8,7 +8,8 @@ import tempfile
 import pytest
 
 from mlsyseng_mcp.database import Database
-from mlsyseng_mcp.docling_worker import extract_concepts, _chunk_text
+from mlsyseng_mcp.docling_worker import extract_concepts
+from mlsyseng_mcp.embeddings import _chunk_text
 from mlsyseng_mcp.expert_registry import ExpertRegistry, _slugify, _concepts_to_capabilities
 from mlsyseng_mcp.loop_controller import ConvergenceLoop, l2_norm, default_step_fn
 
@@ -131,14 +132,12 @@ class TestDoclingWorker:
         assert extract_concepts("No ML concepts here, just regular text.") == []
 
     def test_chunk_text(self):
-        from mlsyseng_mcp.embeddings import _chunk_text
         words = " ".join(f"word{i}" for i in range(1000))
         chunks = _chunk_text(words, chunk_size=100, overlap=10)
         assert len(chunks) > 1
         assert all(len(c.split()) <= 100 for c in chunks)
 
     def test_chunk_text_short(self):
-        from mlsyseng_mcp.embeddings import _chunk_text
         short = "This is a short text."
         chunks = _chunk_text(short, chunk_size=500)
         assert len(chunks) == 1

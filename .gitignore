@@ -55,3 +55,4 @@ dmypy.json
 .cursor/
 *.db
 *.sqlite
+Miniforge3-Linux-x86_64.sh
