@@ -1,0 +1,133 @@
+# MLSysEng MoE - Skills Definition
+# Source of truth for all platform-specific skill configurations
+
+name: mlsyseng-moe
+version: "0.1.0"
+description: >
+  Mixture of Experts system that extracts knowledge from ML Principles PDFs,
+  registers chapter experts with skills/strategy/formulas, and builds Kaggle
+  competition entries using RAG-informed skill selection with state convergence loops.
+
+mcp_server:
+  command: python
+  args:
+    - "-m"
+    - "mlsyseng_mcp.server"
+  env:
+    ML_PRINCIPLES_PATH: "${ML_PRINCIPLES_PATH:-~/Desktop/Machine Learning Principles - Chapters}"
+    SQLITE_DB_PATH: "${SQLITE_DB_PATH:-~/.mlsyseng/mlsyseng.db}"
+    CHROMA_DB_PATH: "${CHROMA_DB_PATH:-~/.mlsyseng/chroma_db}"
+    KAGGLE_SKILLS_PATH: "${KAGGLE_SKILLS_PATH:-~/skills}"
+
+tools:
+  - name: extract-knowledge
+    alias: evolve
+    description: >
+      Extract PDFs, index chapters, create experts. Scans ML Principles chapter
+      folders, extracts content using docling, generates embeddings, and registers
+      chapter experts in the MoE system.
+    parameters:
+      force_reindex:
+        type: boolean
+        default: false
+        description: Re-extract and re-index all chapters even if already done
+
+  - name: search-concepts
+    description: >
+      Semantic search over ML Principles knowledge base using embeddings and ChromaDB.
+    parameters:
+      query:
+        type: string
+        required: true
+        description: Search query (e.g., "neural network optimization")
+      n_results:
+        type: integer
+        default: 5
+        description: Number of results to return
+
+  - name: list-experts
+    description: List all registered chapter experts with capabilities, skills, and formulas.
+
+  - name: build-entry
+    description: >
+      Build a competition entry using expert knowledge and RAG-informed skill selection.
+      Runs the convergence loop to weight experts optimally.
+    parameters:
+      competition:
+        type: string
+        default: titanic
+        description: Competition name/slug
+
+  - name: run-rdagent
+    description: >
+      Prepare rdagent context enriched with ML Principles knowledge for
+      data_science competitions.
+    parameters:
+      competition_name:
+        type: string
+        required: true
+        description: Competition name
+      description:
+        type: string
+        default: ""
+        description: Competition description
+      n_context_results:
+        type: integer
+        default: 5
+
+  - name: ask-expert
+    description: Query a specific chapter expert about a topic.
+    parameters:
+      expert_slug:
+        type: string
+        required: true
+        description: "Expert slug identifier (e.g., 08_ml_systems)"
+      question:
+        type: string
+        required: true
+        description: Question to ask the expert
+
+  - name: get-extraction-status
+    description: Check the progress of PDF extraction across all chapters.
+
+  - name: get-stats
+    description: Get system statistics (chapters, experts, embeddings, runs).
+
+platforms:
+  openclaw:
+    skill_path: "~/.openclaw/workspace/skills/mlsyseng"
+    config_path: "~/.openclaw/openclaw.json"
+    config_key: "mcpServers"
+  claude_desktop:
+    config_path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+    config_key: "mcpServers"
+  cursor:
+    skill_path: "~/.cursor/skills/mlsyseng"
+  gemini:
+    config_path: "~/.gemini/mcp_config.json"
+    config_key: "mcpServers"
+  generic:
+    skill_path: "~/.skills/mlsyseng"
+
+skill_template: |
+  # MLSysEng MoE - ML Systems Expert Mixture of Experts
+
+  A Mixture of Experts system for ML competition entry building.
+
+  ## Available Tools
+
+  - `extract-knowledge`: Extract PDFs, index chapters, create experts
+  - `search-concepts`: Semantic search over ML Principles
+  - `list-experts`: List all chapter experts
+  - `build-entry`: Build competition entry using expert knowledge
+  - `run-rdagent`: Run rdagent with ML Principles context
+  - `ask-expert`: Query a specific chapter expert
+  - `get-extraction-status`: Check extraction progress
+  - `get-stats`: System statistics
+
+  ## Quick Start
+
+  1. Extract knowledge: `extract-knowledge(force_reindex=false)`
+  2. List experts: `list-experts()`
+  3. Build entry: `build-entry(competition="titanic")`
+  4. Run convergence: `evolve(competition="titanic")`
