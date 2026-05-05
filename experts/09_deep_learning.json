@@ -1,0 +1,28 @@
+{
+  "expert_name": "09_Deep_Learning",
+  "slug": "09_deep_learning",
+  "capabilities": [
+    "Deep learning architecture design",
+    "Neural network training and optimization",
+    "Transfer learning and fine-tuning",
+    "Convolutional and recurrent network design"
+  ],
+  "skills": [
+    "~/skills/kaggle-model-trainer",
+    "~/skills/kaggle-deep-learning",
+    "~/skills/kaggle-preprocessor"
+  ],
+  "strategy": "Baseline \u2192 Architecture Search \u2192 Training \u2192 Fine-tuning \u2192 Submit",
+  "formula": {
+    "objective": "minimize_cross_entropy_loss",
+    "function": "L = -\u03a3 y_i log(\u0177_i)",
+    "metrics": ["accuracy", "f1_score", "precision", "recall"]
+  },
+  "loop_config": {
+    "objective": "minimize_cross_entropy_loss",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.0005,
+    "max_iterations": 15,
+    "patience": 4
+  }
+}
