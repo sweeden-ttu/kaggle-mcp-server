@@ -11,7 +11,7 @@ entries until the state vector converges or patience is exhausted.
 import logging
 import math
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -67,7 +67,7 @@ class LoopController:
             "l2_norm": float("inf"),
             "converged": False,
             "patience_cnt": 0,
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
         }
         self.db.upsert_loop_state(state)
         return state

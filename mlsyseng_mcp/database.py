@@ -8,7 +8,7 @@ and convergence loop state.
 import json
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -107,7 +107,7 @@ class MoEDatabase:
         concepts: Optional[List[str]] = None,
         status: str = "pending",
     ) -> Dict[str, Any]:
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         self.conn.execute(
             """
             INSERT INTO chapters (chapter_id, chapter_num, title, source_path,
@@ -175,7 +175,7 @@ class MoEDatabase:
     # ── Expert CRUD ───────────────────────────────────────────────
 
     def upsert_expert(self, expert: Dict[str, Any]) -> Dict[str, Any]:
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         self.conn.execute(
             """
             INSERT INTO experts (expert_id, chapter_id, expert_name, slug,
@@ -232,7 +232,7 @@ class MoEDatabase:
     # ── Loop state ────────────────────────────────────────────────
 
     def upsert_loop_state(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         self.conn.execute(
             """
             INSERT INTO loop_state (loop_id, competition, iteration,
