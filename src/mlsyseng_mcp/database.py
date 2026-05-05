@@ -6,7 +6,7 @@ Manages chapters, experts, concepts, and extraction metadata.
 import json
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -99,7 +99,7 @@ class MLSysEngDB:
     ) -> int:
         """Insert or update a chapter. Returns chapter id."""
         conn = self._get_conn()
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         try:
             cur = conn.execute(
                 """INSERT INTO chapters (chapter_number, title, source_path, content_md, page_count, extracted_at, updated_at)
@@ -173,7 +173,7 @@ class MLSysEngDB:
     def upsert_expert(self, expert: Dict[str, Any]) -> int:
         """Insert or update an expert definition. Returns expert id."""
         conn = self._get_conn()
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         try:
             capabilities = json.dumps(expert.get("capabilities", []))
             skills = json.dumps(expert.get("skills", []))
@@ -246,7 +246,7 @@ class MLSysEngDB:
         self, chapter_id: int, status: str, message: str = ""
     ) -> int:
         conn = self._get_conn()
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         try:
             cur = conn.execute(
                 """INSERT INTO extraction_log (chapter_id, status, message, started_at)
@@ -260,7 +260,7 @@ class MLSysEngDB:
 
     def update_extraction_log(self, log_id: int, status: str, message: str = ""):
         conn = self._get_conn()
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         try:
             conn.execute(
                 "UPDATE extraction_log SET status=?, message=?, completed_at=? WHERE id=?",
