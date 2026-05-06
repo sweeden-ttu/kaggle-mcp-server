@@ -1,0 +1,33 @@
+[project]
+name = "mlsyseng-moe"
+version = "0.1.0"
+description = "Mixture of Experts system for ML Principles knowledge extraction and Kaggle competition building"
+readme = {text = "MLSysEng MoE - Machine Learning Systems Expert Mixture of Experts", content-type = "text/plain"}
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "sentence-transformers>=2.2.0",
+    "chromadb>=0.4.0",
+    "numpy>=1.24.0",
+    "pyyaml>=6.0",
+    "pdfplumber>=0.10.0",
+    "PyPDF2>=3.0.0",
+]
+
+[project.optional-dependencies]
+docling = ["docling>=1.0.0"]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[project.scripts]
+mlsyseng-moe = "mlsyseng_moe.mlsyseng_mcp.server:main"
+mlsyseng-skills = "mlsyseng_moe.skill_generator:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mlsyseng_moe"]
