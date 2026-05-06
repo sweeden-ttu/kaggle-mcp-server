@@ -3,7 +3,7 @@
 import json
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -115,7 +115,7 @@ class Database:
                     extracted_text,
                     json.dumps(concepts) if concepts else None,
                     extraction_status,
-                    datetime.utcnow().isoformat() if extraction_status == "completed" else None,
+                    datetime.now(timezone.utc).isoformat() if extraction_status == "completed" else None,
                 ),
             )
             cursor = conn.execute(
