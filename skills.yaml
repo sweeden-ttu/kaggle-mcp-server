@@ -1,0 +1,136 @@
+# MLSysEng MoE - Skills Source of Truth
+# This file defines skills that get generated for all AI platforms.
+
+name: mlsyseng-moe
+version: "0.1.0"
+description: |
+  Machine Learning Systems Expert Mixture of Experts.
+  Extracts knowledge from ML Principles PDFs, registers chapter experts
+  with skills/strategy/formulas, and builds Kaggle competition entries
+  using RAG-informed skill selection with state convergence loops.
+
+mcp_server:
+  command: "python"
+  args: ["-m", "mlsyseng_moe.server"]
+  env:
+    ML_PRINCIPLES_PATH: "~/Desktop/Machine Learning Principles - Chapters"
+    SQLITE_DB_PATH: "~/.openclaw/workspace/mlsyseng/mlsyseng.db"
+    CHROMA_DB_PATH: "~/.openclaw/workspace/mlsyseng/chroma_db"
+    KAGGLE_SKILLS_PATH: "~/skills"
+
+tools:
+  - name: extract-knowledge
+    alias: evolve
+    description: "Extract PDFs, index chapters, create experts"
+    parameters:
+      - name: force_reindex
+        type: boolean
+        default: false
+        description: "Re-extract even if already done"
+
+  - name: search-concepts
+    description: "Semantic search over ML Principles"
+    parameters:
+      - name: query
+        type: string
+        required: true
+        description: "Search query"
+      - name: n_results
+        type: integer
+        default: 5
+        description: "Number of results"
+
+  - name: list-experts
+    description: "List all chapter experts"
+
+  - name: build-entry
+    description: "Build competition entry using expert knowledge"
+    parameters:
+      - name: competition
+        type: string
+        default: "titanic"
+        description: "Competition name/slug"
+
+  - name: run-rdagent
+    description: "Run rdagent with ML Principles context"
+    parameters:
+      - name: competition
+        type: string
+        default: "titanic"
+      - name: description
+        type: string
+        default: ""
+
+  - name: get-extraction-status
+    description: "Check extraction progress"
+
+  - name: get-stats
+    description: "System statistics"
+
+platforms:
+  openclaw:
+    skill_dir: "~/.openclaw/workspace/skills/mlsyseng"
+    config_file: "~/.openclaw/openclaw.json"
+    config_key: "mcpServers"
+
+  claude_desktop:
+    config_file: "~/Library/Application Support/Claude/claude_desktop_config.json"
+    config_key: "mcpServers"
+
+  cursor:
+    skill_dir: "~/.cursor/skills/mlsyseng"
+
+  gemini:
+    config_file: "~/.gemini/mcp_config.json"
+    config_key: "mcpServers"
+
+  generic:
+    skill_dir: "~/.skills/mlsyseng"
+
+skill_content: |
+  # MLSysEng MoE - ML Systems Expert Skill
+
+  ## Overview
+  This skill provides access to a Mixture of Experts (MoE) system that extracts
+  knowledge from ML Principles PDFs and uses RAG-informed skill selection to build
+  Kaggle competition entries.
+
+  ## Available Tools
+
+  ### extract-knowledge
+  Extract PDFs, index chapters, and create experts from ML Principles content.
+  Use when you need to build or refresh the knowledge base.
+
+  ### search-concepts
+  Semantic search over indexed ML Principles. Use to find relevant concepts
+  for any ML task or competition.
+
+  ### list-experts
+  List all registered chapter experts with their capabilities, skills, and strategies.
+
+  ### build-entry
+  Build a competition entry plan with RAG-informed expert and skill selection.
+  Returns recommended experts, skills, and strategy.
+
+  ### evolve
+  Run the state convergence loop for iterative competition optimization.
+  Exit condition: ||state[n] - state[n-1]||_2 < epsilon
+
+  ### run-rdagent
+  Generate context and prepare rdagent execution with ML Principles knowledge.
+
+  ## Usage Pattern
+
+  1. First, extract knowledge: `extract-knowledge(force_reindex=false)`
+  2. Search for relevant concepts: `search-concepts(query="your topic")`
+  3. Build an entry plan: `build-entry(competition="competition-name")`
+  4. Run convergence loop: `evolve(competition="competition-name")`
+
+  ## Expert Model
+
+  Each expert has:
+  - **capabilities**: What the expert can do
+  - **skills**: Which Kaggle skills it recommends
+  - **strategy**: Step-by-step approach
+  - **formula**: Mathematical objective and metrics
+  - **loop_config**: Convergence parameters (epsilon, patience, max_iterations)
