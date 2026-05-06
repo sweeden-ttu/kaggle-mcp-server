@@ -8,7 +8,7 @@ import json
 import os
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -124,7 +124,7 @@ class Database:
                     source_path,
                     content_md,
                     json.dumps(concepts or []),
-                    datetime.utcnow().isoformat(),
+                    datetime.now(timezone.utc).isoformat(),
                     page_count,
                 ),
             )
@@ -190,7 +190,7 @@ class Database:
                     strategy,
                     json.dumps(formula or {}),
                     json.dumps(loop_config or {}),
-                    datetime.utcnow().isoformat(),
+                    datetime.now(timezone.utc).isoformat(),
                 ),
             )
             row = conn.execute(
@@ -240,7 +240,7 @@ class Database:
         error_message: str = "",
         pages_extracted: int = 0,
     ):
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         with self._connect() as conn:
             conn.execute(
                 """INSERT INTO extraction_status
@@ -287,7 +287,7 @@ class Database:
                     json.dumps(state_vector),
                     l2_norm,
                     1 if converged else 0,
-                    datetime.utcnow().isoformat(),
+                    datetime.now(timezone.utc).isoformat(),
                 ),
             )
 
