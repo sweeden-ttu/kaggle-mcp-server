@@ -1,0 +1,28 @@
+{
+  "expert_name": "03_Deep Learning",
+  "slug": "03_deep_learning",
+  "capabilities": [
+    "Train deep neural networks with backpropagation",
+    "Design neural network architectures",
+    "Apply deep learning to complex problems",
+    "Implement transformer-based models"
+  ],
+  "skills": [
+    "~/skills/kaggle-deep-trainer",
+    "~/skills/kaggle-preprocessor",
+    "~/skills/kaggle-model-trainer"
+  ],
+  "strategy": "Baseline → Architecture Search → Training → Ensemble → Submit",
+  "formula": {
+    "objective": "minimize_cross_entropy",
+    "function": "L = -Σ yᵢ log(ŷᵢ)",
+    "metrics": ["accuracy", "loss", "auc"]
+  },
+  "loop_config": {
+    "objective": "minimize_cross_entropy",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 10,
+    "patience": 3
+  }
+}

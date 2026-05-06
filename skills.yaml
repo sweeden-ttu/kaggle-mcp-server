@@ -1,0 +1,78 @@
+name: mlsyseng-moe
+version: "1.0.0"
+description: |
+  ML Systems Expert Mixture of Experts - Extracts knowledge from ML Principles PDFs,
+  registers chapter experts with skills/strategy/formulas, and builds Kaggle competition
+  entries using RAG-informed skill selection with state convergence loops.
+
+mcp_server:
+  command: python
+  args: ["-m", "mlsyseng_mcp.server"]
+  env:
+    ML_PRINCIPLES_PATH: "~/Desktop/Machine Learning Principles - Chapters"
+    SQLITE_DB_PATH: "~/.openclaw/workspace/mlsyseng/mlsyseng.db"
+    CHROMA_DB_PATH: "~/.openclaw/workspace/mlsyseng/chroma_db"
+    KAGGLE_SKILLS_PATH: "~/skills"
+
+tools:
+  - name: extract-knowledge
+    description: "Extract PDFs, index chapters, create experts"
+    aliases: ["evolve"]
+  - name: search-concepts
+    description: "Semantic search over ML Principles"
+  - name: list-experts
+    description: "List all chapter experts"
+  - name: build-entry
+    description: "Build competition entry using expert knowledge"
+  - name: run-rdagent
+    description: "Run rdagent with ML Principles context"
+  - name: ask-expert
+    description: "Query specific chapter expert"
+  - name: get-extraction-status
+    description: "Check extraction progress"
+  - name: get-stats
+    description: "System statistics"
+
+skill:
+  title: "MLSysEng MoE Expert System"
+  instructions: |
+    You have access to the MLSysEng MoE (Mixture of Experts) system.
+    This system extracts knowledge from ML Principles PDFs and provides expert guidance
+    for Kaggle competitions.
+
+    ## Workflow
+
+    1. **Extract Knowledge**: Use `extract-knowledge` to index ML Principles chapters
+    2. **Search Concepts**: Use `search-concepts` to find relevant ML knowledge
+    3. **List Experts**: Use `list-experts` to see available chapter experts
+    4. **Build Entry**: Use `build-entry` to create a competition strategy
+    5. **Evolve**: Use `evolve` to run the convergence loop
+
+    ## Expert System
+
+    Each chapter expert has:
+    - Capabilities (what they can do)
+    - Skills (which Kaggle skills they recommend)
+    - Strategy (step-by-step approach)
+    - Formula (mathematical objective)
+    - Loop config (convergence parameters)
+
+    ## State Convergence
+
+    The system uses L2 norm convergence:
+    - Exit condition: ||state[n] - state[n-1]||_2 < epsilon
+    - Default epsilon: 0.001
+    - Patience: 3 consecutive converging iterations
+
+platforms:
+  openclaw:
+    skill_path: "~/.openclaw/workspace/skills/mlsyseng/"
+    config_path: "~/.openclaw/openclaw.json"
+  claude_desktop:
+    config_path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+  cursor:
+    skill_path: "~/.cursor/skills/mlsyseng/"
+  gemini:
+    config_path: "~/.gemini/mcp_config.json"
+  generic:
+    skill_path: "~/.skills/mlsyseng/"
