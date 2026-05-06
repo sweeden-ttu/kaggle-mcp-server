@@ -1,0 +1,31 @@
+{
+  "expert_name": "05_Deep Learning",
+  "slug": "05_deep_learning",
+  "capabilities": [
+    "Architecture design",
+    "Build and train neural networks",
+    "Build baseline models quickly",
+    "Deep model architectures",
+    "GPU-accelerated training",
+    "Systematic hyperparameter search"
+  ],
+  "skills": [
+    "~/skills/kaggle-deep-learning",
+    "~/skills/kaggle-model-trainer",
+    "~/skills/kaggle-optimizer",
+    "~/skills/kaggle-preprocessor"
+  ],
+  "strategy": "Baseline → EDA → Feature Engineering → Model Selection → Submit",
+  "formula": {
+    "objective": "minimize_validation_loss",
+    "function": "L = CrossEntropy(ŷ, y) + λ||θ||₂²",
+    "metrics": ["accuracy", "f1_score", "loss"]
+  },
+  "loop_config": {
+    "objective": "minimize_validation_loss",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 10,
+    "patience": 3
+  }
+}
