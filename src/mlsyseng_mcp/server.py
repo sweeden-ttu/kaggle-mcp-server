@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 mcp = FastMCP(
     "mlsyseng-moe",
-    description=(
+    instructions=(
         "Machine Learning Systems Expert Mixture of Experts. "
         "Extracts knowledge from ML Principles PDFs, registers chapter experts, "
         "and builds Kaggle competition entries using RAG-informed skill selection."
