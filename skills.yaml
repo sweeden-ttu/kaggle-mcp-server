@@ -1,0 +1,126 @@
+name: MLSysEng MoE
+description: >
+  Machine Learning Systems Expert Mixture of Experts - Extracts knowledge from
+  ML Principles PDFs, registers chapter experts with skills/strategy/formulas,
+  and builds Kaggle competition entries using RAG-informed skill selection with
+  state convergence loops.
+
+version: "0.1.0"
+
+env:
+  ML_PRINCIPLES_PATH: "~/Desktop/Machine Learning Principles - Chapters"
+  SQLITE_DB_PATH: "~/.openclaw/workspace/mlsyseng/mlsyseng.db"
+  CHROMA_DB_PATH: "~/.openclaw/workspace/mlsyseng/chroma_db"
+  KAGGLE_SKILLS_PATH: "~/skills"
+
+tools:
+  - name: extract-knowledge
+    description: "Extract PDFs, index chapters, create experts from ML Principles"
+    aliases: ["evolve"]
+    args:
+      force_reindex:
+        type: boolean
+        default: false
+        description: "Re-extract even already indexed chapters"
+
+  - name: search-concepts
+    description: "Semantic search over ML Principles knowledge base"
+    args:
+      query:
+        type: string
+        required: true
+        description: "Search query text"
+      n_results:
+        type: integer
+        default: 5
+        description: "Number of results to return"
+
+  - name: list-experts
+    description: "List all registered chapter experts"
+    args: {}
+
+  - name: build-entry
+    description: "Build competition entry using expert knowledge and RAG"
+    args:
+      competition:
+        type: string
+        required: true
+        description: "Competition name/slug"
+      description:
+        type: string
+        default: ""
+        description: "Competition description"
+
+  - name: run-rdagent
+    description: "Run rdagent with ML Principles context"
+    args:
+      competition:
+        type: string
+        required: true
+        description: "Competition name"
+      description:
+        type: string
+        default: ""
+        description: "Competition description"
+
+  - name: ask-expert
+    description: "Query a specific chapter expert"
+    args:
+      expert_slug:
+        type: string
+        required: true
+        description: "Expert slug identifier"
+      question:
+        type: string
+        required: true
+        description: "Question to ask"
+
+  - name: get-extraction-status
+    description: "Check extraction progress"
+    args: {}
+
+  - name: get-stats
+    description: "System statistics"
+    args: {}
+
+experts:
+  default_strategy: "Baseline → EDA → Feature Engineering → Model Selection → Submit"
+  default_loop_config:
+    objective: minimize_validation_loss
+    exit_condition: "||state[n] - state[n-1]||_2 < epsilon"
+    epsilon: 0.001
+    max_iterations: 10
+    patience: 3
+
+  skill_categories:
+    optimization:
+      - kaggle-model-trainer
+      - kaggle-hyperparameter-tuner
+    architecture:
+      - kaggle-model-trainer
+      - kaggle-deep-learning
+    regularization:
+      - kaggle-model-trainer
+      - kaggle-preprocessor
+    evaluation:
+      - kaggle-submission-builder
+      - kaggle-eda-analyzer
+    ensemble_methods:
+      - kaggle-model-trainer
+      - kaggle-ensemble-builder
+    unsupervised:
+      - kaggle-feature-engineer
+      - kaggle-preprocessor
+
+platforms:
+  openclaw:
+    skill_path: "~/.openclaw/workspace/skills/mlsyseng/"
+    config_path: "~/.openclaw/openclaw.json"
+  claude_desktop:
+    config_path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+  cursor:
+    skill_path: "~/.cursor/skills/mlsyseng/"
+  gemini:
+    config_path: "~/.gemini/mcp_config.json"
+  generic:
+    skill_path: "~/.skills/mlsyseng/"
