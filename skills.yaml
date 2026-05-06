@@ -1,0 +1,160 @@
+# MLSysEng MoE - Skills Definition
+# Source of truth for all AI platform skill configurations
+
+name: mlsyseng-moe
+version: "0.1.0"
+description: >
+  Machine Learning Systems Expert Mixture of Experts.
+  Extracts knowledge from ML Principles PDFs, registers chapter experts
+  with skills/strategy/formulas, and builds Kaggle competition entries
+  using RAG-informed skill selection with state convergence loops.
+
+mcp_server:
+  command: python
+  args: ["-m", "mlsyseng_mcp.server"]
+  env:
+    ML_PRINCIPLES_PATH: "${ML_PRINCIPLES_PATH:-~/Desktop/Machine Learning Principles - Chapters}"
+    SQLITE_DB_PATH: "${SQLITE_DB_PATH:-~/.mlsyseng/mlsyseng.db}"
+    CHROMA_DB_PATH: "${CHROMA_DB_PATH:-~/.mlsyseng/chroma_db}"
+    KAGGLE_SKILLS_PATH: "${KAGGLE_SKILLS_PATH:-~/skills}"
+
+tools:
+  - name: extract-knowledge
+    description: >
+      Extract PDFs, index chapters, create experts.
+      Scans all chapter folders in ML Principles, extracts PDF content using docling,
+      generates embeddings, and creates expert definitions.
+    parameters:
+      force_reindex:
+        type: boolean
+        default: false
+        description: Force re-extraction even if chapters are already indexed
+      base_path:
+        type: string
+        description: Override path for the ML Principles directory
+
+  - name: evolve
+    description: >
+      Run the convergence loop for a competition using expert knowledge.
+      Exit condition: ||state[n] - state[n-1]||_2 < epsilon
+    parameters:
+      competition:
+        type: string
+        default: "titanic"
+      max_iterations:
+        type: integer
+        default: 10
+      epsilon:
+        type: number
+        default: 0.001
+      patience:
+        type: integer
+        default: 3
+
+  - name: search-concepts
+    description: Semantic search over ML Principles knowledge base
+    parameters:
+      query:
+        type: string
+        required: true
+      n_results:
+        type: integer
+        default: 5
+
+  - name: list-experts
+    description: List all chapter experts with capabilities and skills
+
+  - name: build-entry
+    description: >
+      Build a competition entry using expert knowledge and RAG-informed skill selection
+    parameters:
+      competition:
+        type: string
+        default: "titanic"
+
+  - name: run-rdagent
+    description: Run rdagent with ML Principles context for a Kaggle competition
+    parameters:
+      competition:
+        type: string
+        default: "titanic"
+      description:
+        type: string
+        default: ""
+      max_iterations:
+        type: integer
+        default: 5
+
+  - name: get-extraction-status
+    description: Check extraction progress
+
+  - name: get-stats
+    description: System statistics
+
+platforms:
+  openclaw:
+    skill_path: "~/.openclaw/workspace/skills/mlsyseng/"
+    config_path: "~/.openclaw/openclaw.json"
+    config_key: "mcpServers"
+
+  claude_desktop:
+    config_path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+    config_key: "mcpServers"
+
+  cursor:
+    skill_path: "~/.cursor/skills/mlsyseng/"
+
+  gemini:
+    config_path: "~/.gemini/mcp_config.json"
+    config_key: "mcpServers"
+
+  generic:
+    skill_path: "~/.skills/mlsyseng/"
+
+skill_content: |
+  # MLSysEng MoE - Machine Learning Systems Expert
+
+  ## Overview
+  This skill provides access to the MLSysEng Mixture of Experts system,
+  which extracts knowledge from ML Principles PDFs and uses it to build
+  intelligent Kaggle competition entries.
+
+  ## Usage
+
+  ### 1. Extract Knowledge
+  First, extract knowledge from ML Principles PDFs:
+  ```
+  extract-knowledge(force_reindex=false)
+  ```
+
+  ### 2. List Experts
+  View all available chapter experts:
+  ```
+  list-experts()
+  ```
+
+  ### 3. Search Concepts
+  Search the knowledge base for specific topics:
+  ```
+  search-concepts(query="neural network optimization")
+  ```
+
+  ### 4. Build Competition Entry
+  Build a Kaggle competition entry with expert guidance:
+  ```
+  build-entry(competition="titanic")
+  ```
+
+  ### 5. Run Convergence Loop
+  Iteratively improve an entry until convergence:
+  ```
+  evolve(competition="titanic", max_iterations=10, epsilon=0.001)
+  ```
+
+  ## Expert System
+  Each chapter expert provides:
+  - **Capabilities**: What the expert can do
+  - **Skills**: Kaggle skill paths for implementation
+  - **Strategy**: Step-by-step approach (Baseline → EDA → Feature Eng → Model → Submit)
+  - **Formula**: Objective function with metrics
+  - **Loop Config**: Convergence parameters (epsilon, patience, max_iterations)
