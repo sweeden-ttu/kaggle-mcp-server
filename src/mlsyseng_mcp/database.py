@@ -9,7 +9,7 @@ import json
 import os
 import sqlite3
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -29,7 +29,7 @@ class ChapterRecord:
 
     def __post_init__(self):
         if not self.extracted_at:
-            self.extracted_at = datetime.utcnow().isoformat()
+            self.extracted_at = datetime.now(timezone.utc).isoformat()
         if not self.word_count:
             self.word_count = len(self.content_md.split())
 
@@ -51,7 +51,7 @@ class ExpertRecord:
 
     def __post_init__(self):
         if not self.created_at:
-            self.created_at = datetime.utcnow().isoformat()
+            self.created_at = datetime.now(timezone.utc).isoformat()
         if not self.formula:
             self.formula = {
                 "objective": "minimize_validation_loss",
@@ -80,7 +80,7 @@ class ConvergenceState:
 
     def __post_init__(self):
         if not self.timestamp:
-            self.timestamp = datetime.utcnow().isoformat()
+            self.timestamp = datetime.now(timezone.utc).isoformat()
 
 
 _SCHEMA = """

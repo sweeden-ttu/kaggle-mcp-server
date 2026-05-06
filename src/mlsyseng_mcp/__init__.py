@@ -1,5 +1,10 @@
 """MLSysEng MoE - Mixture of Experts system for ML Principles knowledge extraction."""
 
-from .server import main
+
+def main():
+    from .server import main as _main
+
+    _main()
+
 
 __all__ = ["main"]
