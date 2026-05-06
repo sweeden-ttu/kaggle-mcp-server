@@ -1,0 +1,112 @@
+name: mlsyseng-moe
+version: "0.1.0"
+description: |
+  ML Systems Engineering Mixture of Experts - Extracts knowledge from ML Principles PDFs,
+  registers chapter experts with skills/strategy/formulas, and builds Kaggle competition
+  entries using RAG-informed skill selection with state convergence loops.
+
+mcp_server:
+  command: python
+  args: ["-m", "mlsyseng_mcp.server"]
+  working_directory: "${WORKSPACE}/src"
+  env:
+    ML_PRINCIPLES_PATH: "${ML_PRINCIPLES_PATH:-/Users/sweeden/Desktop/Machine Learning Principles - Chapters}"
+    SQLITE_DB_PATH: "${SQLITE_DB_PATH:-~/.openclaw/workspace/mlsyseng/mlsyseng.db}"
+    CHROMA_DB_PATH: "${CHROMA_DB_PATH:-~/.openclaw/workspace/mlsyseng/chroma_db}"
+    KAGGLE_SKILLS_PATH: "${KAGGLE_SKILLS_PATH:-/Users/sweeden/skills}"
+
+tools:
+  - name: extract-knowledge
+    description: "Extract PDFs, index chapters, create experts"
+    usage: "extract-knowledge(force_reindex=false)"
+
+  - name: evolve
+    description: "Run convergence loop with expert knowledge"
+    usage: "evolve(competition='titanic')"
+
+  - name: search-concepts
+    description: "Semantic search over ML Principles"
+    usage: "search-concepts(query='neural network optimization', n_results=5)"
+
+  - name: list-experts
+    description: "List all chapter experts"
+    usage: "list-experts()"
+
+  - name: build-entry
+    description: "Build competition entry using expert knowledge"
+    usage: "build-entry(competition='titanic')"
+
+  - name: run-rdagent
+    description: "Run rdagent with ML Principles context"
+    usage: "run-rdagent(competition='titanic', description='Predict survival on the Titanic')"
+
+  - name: ask-expert
+    description: "Query specific chapter expert"
+    usage: "ask-expert(expert_slug='08_ml_systems', question='How to tune hyperparameters?')"
+
+  - name: get-extraction-status
+    description: "Check extraction progress"
+    usage: "get-extraction-status()"
+
+  - name: get-stats
+    description: "System statistics"
+    usage: "get-stats()"
+
+platforms:
+  openclaw:
+    skill_path: "~/.openclaw/workspace/skills/mlsyseng"
+    config_path: "~/.openclaw/openclaw.json"
+
+  claude_desktop:
+    config_path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+
+  cursor:
+    skill_path: "~/.cursor/skills/mlsyseng"
+
+  gemini:
+    config_path: "~/.gemini/mcp_config.json"
+
+  generic:
+    skill_path: "~/.skills/mlsyseng"
+
+skill_content: |
+  # MLSysEng MoE Expert System
+
+  ## Overview
+  This skill provides access to the ML Systems Engineering Mixture of Experts system.
+  It extracts knowledge from ML Principles PDFs, manages chapter experts, and builds
+  Kaggle competition entries using RAG-informed skill selection.
+
+  ## Available Tools
+
+  ### Knowledge Extraction
+  - `extract-knowledge`: Extract and index all ML Principles PDFs
+  - `search-concepts`: Semantic search over indexed knowledge
+  - `get-extraction-status`: Check progress of PDF extraction
+
+  ### Expert Management
+  - `list-experts`: List all registered chapter experts
+  - `ask-expert`: Query a specific expert with a question
+
+  ### Competition Building
+  - `build-entry`: Build a competition entry with expert recommendations
+  - `evolve`: Run the convergence loop for iterative optimization
+  - `run-rdagent`: Generate context for rdagent competitions
+
+  ### System
+  - `get-stats`: Get system statistics
+
+  ## Workflow
+
+  1. **Extract Knowledge**: Run `extract-knowledge` to index ML Principles PDFs
+  2. **Query Experts**: Use `list-experts` and `ask-expert` to explore knowledge
+  3. **Build Entry**: Use `build-entry` for a competition plan
+  4. **Evolve**: Run `evolve` to iteratively optimize with convergence loop
+
+  ## Expert Architecture
+  Each expert has:
+  - **Capabilities**: What the expert can do
+  - **Skills**: Kaggle skill paths for implementation
+  - **Strategy**: Step-by-step approach (Baseline → EDA → Feature Eng → Model → Submit)
+  - **Formula**: Mathematical objective (e.g., minimize_validation_loss)
+  - **Loop Config**: Convergence parameters (epsilon, patience, max_iterations)
