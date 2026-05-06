@@ -1,0 +1,178 @@
+# MLSysEng MoE - Skill Definitions
+# Source of truth for all platform configurations.
+# Run `python skill_generator.py` to generate platform-specific configs.
+
+name: mlsyseng-moe
+version: "0.1.0"
+description: >
+  Machine Learning Systems Expert Mixture of Experts.
+  Extracts knowledge from ML Principles PDFs, registers chapter experts,
+  and builds Kaggle competition entries with RAG-informed skill selection.
+
+mcp_server:
+  command: python
+  args:
+    - "-m"
+    - "mlsyseng_mcp.server"
+  env:
+    ML_PRINCIPLES_PATH: "${ML_PRINCIPLES_PATH:-~/Desktop/Machine Learning Principles - Chapters}"
+    SQLITE_DB_PATH: "${SQLITE_DB_PATH:-~/.mlsyseng/mlsyseng.db}"
+    CHROMA_DB_PATH: "${CHROMA_DB_PATH:-~/.mlsyseng/chroma_db}"
+    KAGGLE_SKILLS_PATH: "${KAGGLE_SKILLS_PATH:-~/skills}"
+
+tools:
+  - name: extract-knowledge
+    function: extract_knowledge
+    description: "Extract PDFs, index chapters, create experts"
+    params:
+      - name: force_reindex
+        type: boolean
+        default: false
+        description: "Re-extract even if already indexed"
+
+  - name: evolve
+    function: evolve
+    description: "Run full pipeline with convergence loop"
+    params:
+      - name: competition
+        type: string
+        default: "titanic"
+        description: "Kaggle competition to optimize for"
+
+  - name: search-concepts
+    function: search_concepts
+    description: "Semantic search over ML Principles"
+    params:
+      - name: query
+        type: string
+        required: true
+      - name: n_results
+        type: integer
+        default: 5
+
+  - name: list-experts
+    function: list_experts
+    description: "List all chapter experts"
+
+  - name: ask-expert
+    function: ask_expert
+    description: "Query a specific chapter expert"
+    params:
+      - name: expert_slug
+        type: string
+        required: true
+      - name: question
+        type: string
+        required: true
+
+  - name: build-entry
+    function: build_entry
+    description: "Build competition entry using expert knowledge"
+    params:
+      - name: competition
+        type: string
+        default: "titanic"
+
+  - name: run-rdagent
+    function: run_rdagent
+    description: "Run rdagent with ML Principles context"
+    params:
+      - name: competition
+        type: string
+        required: true
+      - name: description
+        type: string
+        default: ""
+
+  - name: get-extraction-status
+    function: get_extraction_status
+    description: "Check extraction progress"
+
+  - name: get-stats
+    function: get_stats
+    description: "System statistics"
+
+  - name: index-ml-chapters
+    function: index_ml_chapters
+    description: "Index all PDF chapters (RD-Agent compat)"
+    params:
+      - name: force_reindex
+        type: boolean
+        default: false
+
+  - name: search-ml-principles
+    function: search_ml_principles
+    description: "Search indexed knowledge base"
+    params:
+      - name: query
+        type: string
+        required: true
+      - name: n_results
+        type: integer
+        default: 5
+
+  - name: get-rdagent-context
+    function: get_rdagent_context
+    description: "Generate context for rdagent"
+    params:
+      - name: competition_name
+        type: string
+        required: true
+      - name: description
+        type: string
+        default: ""
+
+  - name: list-indexed-chapters
+    function: list_indexed_chapters
+    description: "List indexed chapters"
+
+  - name: get-indexing-stats
+    function: get_indexing_stats
+    description: "Indexing statistics"
+
+skill:
+  name: mlsyseng-moe
+  title: "ML Systems Engineering - Mixture of Experts"
+  description: |
+    Expert system for ML/AI knowledge extraction and Kaggle competition building.
+
+    ## Capabilities
+    - Extract knowledge from ML Principles PDFs using docling
+    - Register chapter experts with skills, strategies, and formulas
+    - Semantic search over ML concepts using RAG
+    - Build Kaggle competition entries with expert-informed skill selection
+    - Run state convergence loops for iterative optimization
+
+    ## Quick Start
+    1. `extract-knowledge` - Index all ML Principles chapters
+    2. `list-experts` - View available experts
+    3. `build-entry(competition="titanic")` - Build a competition entry
+    4. `evolve(competition="titanic")` - Run the convergence loop
+
+  triggers:
+    - "ML principles"
+    - "machine learning expert"
+    - "kaggle competition"
+    - "extract knowledge"
+    - "chapter expert"
+    - "convergence loop"
+    - "build entry"
+    - "moe system"
+
+platforms:
+  openclaw:
+    skill_dir: "~/.openclaw/workspace/skills/mlsyseng"
+    config_path: "~/.openclaw/openclaw.json"
+    workspace_dir: "~/.openclaw/workspace/mlsyseng"
+
+  claude_desktop:
+    config_path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+
+  cursor:
+    skill_dir: "~/.cursor/skills/mlsyseng"
+
+  gemini:
+    config_path: "~/.gemini/mcp_config.json"
+
+  generic:
+    skill_dir: "~/.skills/mlsyseng"
