@@ -1,0 +1,104 @@
+# MLSysEng MoE - Skills Definition
+# Source of truth for all platform skill configurations.
+
+name: mlsyseng-moe
+version: "0.1.0"
+description: >
+  Mixture of Experts system for ML Principles knowledge extraction.
+  Extracts knowledge from ML Principles PDFs, registers chapter experts,
+  and builds Kaggle competition entries using RAG-informed skill selection
+  with state convergence loops.
+
+mcp_server:
+  command: python
+  args:
+    - "-m"
+    - "src.mlsyseng_moe.server"
+  env:
+    ML_PRINCIPLES_PATH: "${ML_PRINCIPLES_PATH:-~/Desktop/Machine Learning Principles - Chapters}"
+    SQLITE_DB_PATH: "${SQLITE_DB_PATH:-~/.openclaw/workspace/mlsyseng/mlsyseng.db}"
+    CHROMA_DB_PATH: "${CHROMA_DB_PATH:-~/.openclaw/workspace/mlsyseng/chroma_db}"
+    KAGGLE_SKILLS_PATH: "${KAGGLE_SKILLS_PATH:-~/skills}"
+
+tools:
+  - name: extract-knowledge
+    description: "Extract PDFs, index chapters, create experts"
+    parameters:
+      force_reindex:
+        type: boolean
+        default: false
+        description: "Re-extract all chapters even if already indexed"
+
+  - name: evolve
+    description: "Run convergence loop for competition refinement"
+    parameters:
+      competition:
+        type: string
+        default: "titanic"
+        description: "Kaggle competition slug"
+
+  - name: search-concepts
+    description: "Semantic search over ML Principles"
+    parameters:
+      query:
+        type: string
+        required: true
+      n_results:
+        type: integer
+        default: 5
+
+  - name: list-experts
+    description: "List all chapter experts"
+
+  - name: ask-expert
+    description: "Query a specific chapter expert"
+    parameters:
+      expert_slug:
+        type: string
+        required: true
+      question:
+        type: string
+        required: true
+
+  - name: build-entry
+    description: "Build competition entry using expert knowledge"
+    parameters:
+      competition:
+        type: string
+        default: "titanic"
+
+  - name: run-rdagent
+    description: "Run rdagent with ML Principles context"
+    parameters:
+      competition:
+        type: string
+        default: "titanic"
+      description:
+        type: string
+        default: ""
+
+  - name: get-extraction-status
+    description: "Check extraction progress"
+
+  - name: get-stats
+    description: "System statistics"
+
+platforms:
+  openclaw:
+    skill_dir: "~/.openclaw/workspace/skills/mlsyseng"
+    skill_file: "SKILL.md"
+    config_file: "~/.openclaw/openclaw.json"
+
+  claude_desktop:
+    config_file: "~/Library/Application Support/Claude/claude_desktop_config.json"
+
+  cursor:
+    skill_dir: "~/.cursor/skills/mlsyseng"
+    skill_file: "SKILL.md"
+
+  gemini:
+    config_file: "~/.gemini/mcp_config.json"
+
+  generic:
+    skill_dir: "~/.skills/mlsyseng"
+    skill_file: "SKILL.md"
