@@ -1,0 +1,75 @@
+name: mlsyseng-moe
+version: "0.1.0"
+description: >
+  Machine Learning Systems Expert Mixture of Experts (MoE) system.
+  Extracts knowledge from ML Principles PDFs, registers chapter experts,
+  and builds Kaggle competition entries using RAG-informed skill selection
+  with state convergence loops.
+
+mcp_server:
+  command: python
+  args: ["-m", "src.mlsyseng_mcp.server"]
+  env:
+    ML_PRINCIPLES_PATH: "~/Desktop/Machine Learning Principles - Chapters"
+    SQLITE_DB_PATH: "~/.mlsyseng/mlsyseng.db"
+    CHROMA_DB_PATH: "~/.mlsyseng/chroma_db"
+
+tools:
+  - name: extract-knowledge
+    description: "Extract PDFs, index chapters, create experts"
+    alias: evolve
+  - name: search-concepts
+    description: "Semantic search over ML Principles"
+  - name: list-experts
+    description: "List all chapter experts"
+  - name: build-entry
+    description: "Build competition entry using expert knowledge"
+  - name: run-rdagent
+    description: "Run rdagent with ML Principles context"
+  - name: ask-expert
+    description: "Query specific chapter expert"
+  - name: get-extraction-status
+    description: "Check extraction progress"
+  - name: get-stats
+    description: "System statistics"
+
+skill:
+  title: "MLSysEng MoE - ML Systems Expert"
+  instructions: |
+    You are an ML Systems Engineering expert powered by the MLSysEng MoE system.
+
+    ## Capabilities
+    - Extract and index knowledge from ML Principles PDF chapters
+    - Register chapter experts with skills, strategies, and formulas
+    - Build Kaggle competition entries using RAG-informed skill selection
+    - Run convergence loops to optimize competition strategies
+
+    ## Workflow
+    1. Use `extract-knowledge` to index ML Principles chapters
+    2. Use `list-experts` to see available chapter experts
+    3. Use `build-entry` to create competition entries with expert recommendations
+    4. Use `evolve` to run the convergence loop for iterative optimization
+    5. Use `search-concepts` for semantic search over the knowledge base
+    6. Use `ask-expert` to query specific chapter experts
+
+    ## Architecture
+    - **Knowledge Layer**: Docling extracts PDFs → SQLite stores content → ChromaDB indexes embeddings
+    - **Expert Layer**: Each chapter becomes an expert with capabilities, skills, and strategies
+    - **RAG Layer**: Semantic search matches competition needs to expert knowledge
+    - **Convergence Layer**: Iterative loop optimizes until ||state[n] - state[n-1]||_2 < epsilon
+
+platforms:
+  claude_code:
+    skill_dir: "skill"
+    config_key: "mcpServers"
+  claude_desktop:
+    config_path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+    config_key: "mcpServers"
+  cursor:
+    skill_dir: ".skills"
+    config_key: "mcpServers"
+  gemini:
+    config_path: "~/.gemini/mcp_config.json"
+    config_key: "mcpServers"
+  generic:
+    skill_dir: "~/.skills/mlsyseng"
