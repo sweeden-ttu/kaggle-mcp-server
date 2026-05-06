@@ -1,13 +1,15 @@
-.PHONY: help install run-workbench run-server test clean build
+.PHONY: help install run-workbench run-server run-moe test clean build generate-skills
 
 help:
 	@echo "Available targets:"
-	@echo "  install       - Install dependencies"
-	@echo "  run-workbench - Run FOL Workbench GUI"
-	@echo "  run-server    - Run MCP Server"
-	@echo "  test          - Run tests"
-	@echo "  build         - Build package"
-	@echo "  clean         - Clean build artifacts"
+	@echo "  install         - Install dependencies"
+	@echo "  run-workbench   - Run FOL Workbench GUI"
+	@echo "  run-server      - Run Kaggle MCP Server"
+	@echo "  run-moe         - Run MLSysEng MoE MCP Server"
+	@echo "  generate-skills - Generate platform skill configs"
+	@echo "  test            - Run tests"
+	@echo "  build           - Build package"
+	@echo "  clean           - Clean build artifacts"
 
 install:
 	@echo "Installing dependencies..."
@@ -18,8 +20,16 @@ run-workbench:
 	PYTHONPATH=. venv/bin/python -m src.fol_workbench.main
 
 run-server:
-	@echo "Running MCP Server..."
+	@echo "Running Kaggle MCP Server..."
 	PYTHONPATH=. venv/bin/python -m mcp.server.fastmcp src.kaggle_mcp_server.server
+
+run-moe:
+	@echo "Running MLSysEng MoE MCP Server..."
+	PYTHONPATH=. python -m mlsyseng_mcp.server
+
+generate-skills:
+	@echo "Generating platform skill configs..."
+	PYTHONPATH=. python skill_generator.py
 
 test:
 	@echo "Running tests..."

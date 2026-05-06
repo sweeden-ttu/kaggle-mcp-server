@@ -495,6 +495,59 @@ Some competitions/datasets require accepting terms:
 ### Rate Limiting
 Kaggle API has rate limits. If you encounter errors, wait a few minutes before retrying.
 
+---
+
+## MLSysEng MoE - Mixture of Experts System
+
+This repository also includes the **MLSysEng MoE** system — a Mixture of Experts framework that extracts knowledge from ML Principles PDFs, registers chapter experts with skills/strategy/formulas, and builds Kaggle competition entries using RAG-informed skill selection with state convergence loops.
+
+### MoE Architecture
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│                    MLSysEng MoE System                              │
+├────────────────────────────────────────────────────────────────────┤
+│  SKILL ARCHITECTURE                                                 │
+│  skills.yaml → Claude Code / Cursor / Gemini / Generic             │
+│                                                                     │
+│  MCP SERVER (mlsyseng-mcp)                                         │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────┐                     │
+│  │ Docling   │─▶│ SQLite   │─▶│ Expert       │                     │
+│  │ Worker    │  │ DB       │  │ Registry     │                     │
+│  └──────────┘  └──────────┘  └──────────────┘                     │
+│                                                                     │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────┐                     │
+│  │ Embeddings│─▶│ ChromaDB │─▶│ Loop         │                     │
+│  │ Engine    │  │ Vectors  │  │ Controller   │                     │
+│  └──────────┘  └──────────┘  └──────────────┘                     │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+### MoE Quick Start
+
+```bash
+# Run the MoE MCP server
+python -m mlsyseng_mcp.server
+
+# Generate platform-specific skill configs
+python skill_generator.py
+```
+
+### MoE MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `extract-knowledge` / `evolve` | Extract PDFs, index chapters, create experts |
+| `search-concepts` | Semantic search over ML Principles |
+| `list-experts` | List all chapter experts |
+| `build-entry` | Build competition entry using expert knowledge |
+| `run-rdagent` | Run rdagent with ML Principles context |
+| `ask-expert` | Query specific chapter expert |
+| `get-extraction-status` | Check extraction progress |
+| `get-stats` | System statistics |
+
+See the module docstrings in `mlsyseng_mcp/` for full documentation.
+
 ## License
 
 MIT
