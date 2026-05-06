@@ -8,7 +8,7 @@ import os
 import sqlite3
 import threading
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -113,7 +113,7 @@ class Database:
                     word_count=excluded.word_count,
                     extracted_at=excluded.extracted_at
             """, (chapter_num, title, source_path, markdown_content,
-                  page_count, word_count, datetime.utcnow().isoformat()))
+                  page_count, word_count, datetime.now(timezone.utc).isoformat()))
             cur.execute("SELECT id FROM chapters WHERE chapter_num=?", (chapter_num,))
             return cur.fetchone()["id"]
 
@@ -206,7 +206,7 @@ class Database:
     def log_extraction(self, chapter_num: int, status: str,
                        error_message: Optional[str] = None):
         with self._cursor() as cur:
-            now = datetime.utcnow().isoformat()
+            now = datetime.now(timezone.utc).isoformat()
             if status == "started":
                 cur.execute("""
                     INSERT INTO extraction_log (chapter_num, status, started_at)
@@ -215,8 +215,11 @@ class Database:
             elif status in ("completed", "failed"):
                 cur.execute("""
                     UPDATE extraction_log SET status=?, completed_at=?, error_message=?
-                    WHERE chapter_num=? AND status='started'
-                    ORDER BY id DESC LIMIT 1
+                    WHERE id = (
+                        SELECT id FROM extraction_log
+                        WHERE chapter_num=? AND status='started'
+                        ORDER BY id DESC LIMIT 1
+                    )
                 """, (status, now, error_message, chapter_num))
 
     def get_extraction_status(self) -> List[Dict[str, Any]]:
