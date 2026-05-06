@@ -1,0 +1,30 @@
+{
+  "expert_name": "08_ML Systems",
+  "slug": "08_ml_systems",
+  "capabilities": [
+    "Build baseline models quickly",
+    "Systematic hyperparameter search",
+    "Design end-to-end ML pipelines",
+    "Scale training across distributed systems",
+    "Monitor model performance in production"
+  ],
+  "skills": [
+    "~/skills/kaggle-preprocessor",
+    "~/skills/kaggle-model-trainer",
+    "~/skills/kaggle-evaluator",
+    "~/skills/kaggle-optimizer"
+  ],
+  "strategy": "Baseline → EDA → Feature Engineering → Model Selection → Submit",
+  "formula": {
+    "objective": "minimize_validation_loss",
+    "function": "L = f(X, θ, α)",
+    "metrics": ["accuracy", "f1_score"]
+  },
+  "loop_config": {
+    "objective": "minimize_validation_loss",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 10,
+    "patience": 3
+  }
+}

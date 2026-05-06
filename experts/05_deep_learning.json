@@ -1,0 +1,30 @@
+{
+  "expert_name": "05_Deep Learning",
+  "slug": "05_deep_learning",
+  "capabilities": [
+    "Build baseline models quickly",
+    "Systematic hyperparameter search",
+    "Apply deep learning techniques",
+    "Build and train neural network models",
+    "Apply regularization to prevent overfitting"
+  ],
+  "skills": [
+    "~/skills/kaggle-preprocessor",
+    "~/skills/kaggle-model-trainer",
+    "~/skills/kaggle-deep-learning",
+    "~/skills/kaggle-regularizer"
+  ],
+  "strategy": "Baseline → EDA → Feature Engineering → Model Selection → Submit",
+  "formula": {
+    "objective": "minimize_validation_loss",
+    "function": "L = (1/N) * Σ loss(f(x_i; θ), y_i) + λ * ||θ||²",
+    "metrics": ["accuracy", "f1_score", "log_loss"]
+  },
+  "loop_config": {
+    "objective": "minimize_validation_loss",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 10,
+    "patience": 3
+  }
+}

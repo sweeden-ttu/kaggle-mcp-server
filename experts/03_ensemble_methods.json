@@ -1,0 +1,30 @@
+{
+  "expert_name": "03_Ensemble Methods",
+  "slug": "03_ensemble_methods",
+  "capabilities": [
+    "Build baseline models quickly",
+    "Systematic hyperparameter search",
+    "Build ensemble models for improved accuracy",
+    "Combine multiple model predictions",
+    "Apply bagging and boosting strategies"
+  ],
+  "skills": [
+    "~/skills/kaggle-preprocessor",
+    "~/skills/kaggle-model-trainer",
+    "~/skills/kaggle-ensemble-builder",
+    "~/skills/kaggle-evaluator"
+  ],
+  "strategy": "Baseline → EDA → Feature Engineering → Model Selection → Submit",
+  "formula": {
+    "objective": "minimize_ensemble_error",
+    "function": "L = f(X, θ₁, ..., θₖ, α)",
+    "metrics": ["accuracy", "f1_score", "auc"]
+  },
+  "loop_config": {
+    "objective": "minimize_ensemble_error",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 10,
+    "patience": 3
+  }
+}

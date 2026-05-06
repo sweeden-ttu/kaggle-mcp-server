@@ -1,0 +1,122 @@
+# MLSysEng MoE - Skills Definition
+# Source of truth for all platform-specific skill configurations
+#
+# This file defines the skills that the MoE system exposes to AI clients.
+# Use skill_generator.py to install these skills across platforms.
+
+name: mlsyseng-moe
+version: "0.1.0"
+description: >
+  Mixture of Experts system for ML Principles knowledge extraction.
+  Extracts knowledge from ML Principles PDFs, registers chapter experts
+  with skills/strategy/formulas, and builds Kaggle competition entries
+  using RAG-informed skill selection with state convergence loops.
+
+mcp_server:
+  command: python
+  args:
+    - -m
+    - mlsyseng_mcp.server
+  env:
+    ML_PRINCIPLES_PATH: "~/Desktop/Machine Learning Principles - Chapters"
+    SQLITE_DB_PATH: "~/.openclaw/workspace/mlsyseng/mlsyseng.db"
+    CHROMA_DB_PATH: "~/.openclaw/workspace/mlsyseng/chroma_db"
+    KAGGLE_SKILLS_PATH: "~/skills"
+
+skills:
+  - name: extract-knowledge
+    description: >
+      Extract text and structured data from ML Principles PDFs using docling.
+      Indexes chapters, generates embeddings, and creates expert definitions.
+    triggers:
+      - "extract knowledge"
+      - "index chapters"
+      - "extract PDFs"
+      - "build knowledge base"
+    tool: extract_knowledge
+
+  - name: evolve
+    description: >
+      Run the state convergence loop for a competition using expert knowledge.
+      Iterates until ||state[n] - state[n-1]||_2 < epsilon with patience-based exit.
+    triggers:
+      - "evolve"
+      - "run convergence"
+      - "optimize for competition"
+      - "run loop"
+    tool: evolve
+
+  - name: search-concepts
+    description: >
+      Semantic search over ML Principles knowledge base using embeddings.
+    triggers:
+      - "search concepts"
+      - "find ML principle"
+      - "search knowledge"
+    tool: search_concepts
+
+  - name: list-experts
+    description: >
+      List all registered chapter experts with their capabilities, skills,
+      strategy, and mathematical formulas.
+    triggers:
+      - "list experts"
+      - "show experts"
+      - "available experts"
+    tool: list_experts
+
+  - name: ask-expert
+    description: >
+      Query a specific chapter expert for domain knowledge and recommendations.
+    triggers:
+      - "ask expert"
+      - "query expert"
+      - "expert advice"
+    tool: ask_expert
+
+  - name: build-entry
+    description: >
+      Build a Kaggle competition entry using RAG-informed expert skill selection.
+      Generates notebook structure and expert assignments.
+    triggers:
+      - "build entry"
+      - "create competition entry"
+      - "generate notebooks"
+    tool: build_entry
+
+  - name: run-rdagent
+    description: >
+      Run rdagent with ML Principles context for data science competitions.
+    triggers:
+      - "run rdagent"
+      - "rdagent context"
+    tool: run_rdagent
+
+  - name: get-extraction-status
+    description: >
+      Check extraction progress for all ML Principles chapters.
+    triggers:
+      - "extraction status"
+      - "check progress"
+    tool: get_extraction_status
+
+  - name: get-stats
+    description: >
+      Get system statistics including chapters, experts, and embeddings.
+    triggers:
+      - "system stats"
+      - "show statistics"
+    tool: get_stats
+
+platforms:
+  openclaw:
+    skill_dir: "~/.openclaw/workspace/skills/mlsyseng"
+    config_path: "~/.openclaw/openclaw.json"
+  claude_desktop:
+    config_path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+  cursor:
+    skill_dir: "~/.cursor/skills/mlsyseng"
+  gemini:
+    config_path: "~/.gemini/mcp_config.json"
+  generic:
+    skill_dir: "~/.skills/mlsyseng"
