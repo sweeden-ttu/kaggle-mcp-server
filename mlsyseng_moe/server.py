@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 mcp = FastMCP(
     "mlsyseng-moe",
-    description="Machine Learning Systems Expert Mixture of Experts - extracts knowledge from ML Principles PDFs, registers chapter experts, and builds Kaggle competition entries using RAG-informed skill selection with state convergence loops.",
+    instructions="Machine Learning Systems Expert Mixture of Experts - extracts knowledge from ML Principles PDFs, registers chapter experts, and builds Kaggle competition entries using RAG-informed skill selection with state convergence loops.",
 )
 
 
