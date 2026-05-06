@@ -1,0 +1,78 @@
+name: mlsyseng-moe
+version: "0.1.0"
+description: >
+  Mixture of Experts system that extracts knowledge from ML Principles PDFs,
+  registers chapter experts with skills/strategy/formulas, and builds Kaggle
+  competition entries using RAG-informed skill selection with state convergence loops.
+
+mcp_server:
+  command: python
+  args:
+    - -m
+    - mlsyseng_mcp.server
+  env:
+    ML_PRINCIPLES_PATH: "${ML_PRINCIPLES_PATH:-~/Desktop/Machine Learning Principles - Chapters}"
+    SQLITE_DB_PATH: "${SQLITE_DB_PATH:-~/.openclaw/workspace/mlsyseng/mlsyseng.db}"
+    CHROMA_DB_PATH: "${CHROMA_DB_PATH:-~/.openclaw/workspace/mlsyseng/chroma_db}"
+    KAGGLE_SKILLS_PATH: "${KAGGLE_SKILLS_PATH:-~/skills}"
+
+tools:
+  - name: extract-knowledge
+    description: "Extract PDFs, index chapters, create experts"
+    alias: evolve
+  - name: search-concepts
+    description: "Semantic search over ML Principles"
+  - name: list-experts
+    description: "List all chapter experts"
+  - name: build-entry
+    description: "Build competition entry using expert knowledge"
+  - name: run-rdagent
+    description: "Run rdagent with ML Principles context"
+  - name: get-extraction-status
+    description: "Check extraction progress"
+  - name: get-stats
+    description: "System statistics"
+
+platforms:
+  openclaw:
+    skill_path: "~/.openclaw/workspace/skills/mlsyseng/"
+    config_path: "~/.openclaw/openclaw.json"
+  claude_desktop:
+    config_path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+  cursor:
+    skill_path: "~/.cursor/skills/mlsyseng/"
+  gemini:
+    config_path: "~/.gemini/mcp_config.json"
+  generic:
+    skill_path: "~/.skills/mlsyseng/"
+
+skill_template: |
+  # MLSysEng MoE - ML Systems Expert
+
+  A Mixture of Experts system for ML knowledge extraction and Kaggle competition entry building.
+
+  ## Available Tools
+
+  - **extract-knowledge**: Extract PDFs, index chapters, create experts
+  - **search-concepts**: Semantic search over ML Principles knowledge base
+  - **list-experts**: List all registered chapter experts
+  - **build-entry**: Build a Kaggle competition entry using expert knowledge
+  - **run-rdagent**: Run rdagent with ML Principles context
+  - **get-extraction-status**: Check PDF extraction progress
+  - **get-stats**: Get system statistics
+
+  ## Quick Start
+
+  1. Run `extract-knowledge` to process ML Principles PDFs
+  2. Use `list-experts` to see available chapter experts
+  3. Use `build-entry(competition="titanic")` to create a competition entry
+  4. Use `evolve(competition="titanic")` to run the convergence loop
+
+  ## Expert System
+
+  Each chapter becomes an expert with:
+  - **Capabilities**: What the expert can do
+  - **Skills**: Kaggle skill paths for the expert
+  - **Strategy**: Step-by-step approach (Baseline → EDA → Feature Eng → Model → Submit)
+  - **Formula**: Objective function and metrics
+  - **Loop Config**: Convergence parameters (epsilon, max_iterations, patience)
