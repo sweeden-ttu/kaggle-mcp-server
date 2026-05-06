@@ -1,0 +1,150 @@
+# MLSysEng MoE - Skill Definitions
+# Source of truth for all platform-specific skill configurations.
+
+name: mlsyseng-moe
+version: "0.1.0"
+description: >
+  Machine Learning Systems Expert Mixture of Experts.
+  Extracts knowledge from ML Principles PDFs, registers chapter experts
+  with skills/strategy/formulas, and builds Kaggle competition entries
+  using RAG-informed skill selection with state convergence loops.
+
+mcp_server:
+  command: "python"
+  args: ["-m", "src.mlsyseng_mcp.server"]
+  env:
+    ML_PRINCIPLES_PATH: "${ML_PRINCIPLES_PATH:-~/Desktop/Machine Learning Principles - Chapters}"
+    SQLITE_DB_PATH: "${SQLITE_DB_PATH:-~/.mlsyseng/mlsyseng.db}"
+    CHROMA_DB_PATH: "${CHROMA_DB_PATH:-~/.mlsyseng/chroma_db}"
+    KAGGLE_SKILLS_PATH: "${KAGGLE_SKILLS_PATH:-~/skills}"
+
+tools:
+  - name: extract-knowledge
+    function: extract_knowledge
+    description: "Extract PDFs, index chapters, create experts"
+    parameters:
+      force_reindex:
+        type: boolean
+        default: false
+        description: "Force re-extraction of already indexed chapters"
+
+  - name: evolve
+    function: evolve
+    description: "Run knowledge extraction + convergence loop for a competition"
+    parameters:
+      competition:
+        type: string
+        default: "titanic"
+        description: "Kaggle competition slug"
+      max_iterations:
+        type: integer
+        default: 10
+        description: "Maximum convergence iterations"
+
+  - name: search-concepts
+    function: search_concepts
+    description: "Semantic search over ML Principles"
+    parameters:
+      query:
+        type: string
+        description: "Search query"
+      n_results:
+        type: integer
+        default: 5
+
+  - name: list-experts
+    function: list_experts
+    description: "List all chapter experts"
+
+  - name: ask-expert
+    function: ask_expert
+    description: "Query a specific chapter expert"
+    parameters:
+      expert_slug:
+        type: string
+        description: "Expert slug identifier"
+      question:
+        type: string
+        description: "Question to ask the expert"
+
+  - name: build-entry
+    function: build_entry
+    description: "Build competition entry using expert knowledge"
+    parameters:
+      competition:
+        type: string
+        default: "titanic"
+
+  - name: run-rdagent
+    function: run_rdagent
+    description: "Run rdagent with ML Principles context"
+    parameters:
+      competition:
+        type: string
+      description:
+        type: string
+        default: ""
+
+  - name: get-extraction-status
+    function: get_extraction_status
+    description: "Check extraction progress"
+
+  - name: get-stats
+    function: get_stats
+    description: "System statistics"
+
+  - name: index-ml-chapters
+    function: index_ml_chapters
+    description: "Index all PDF chapters (extract + embed + store)"
+    parameters:
+      force_reindex:
+        type: boolean
+        default: false
+
+  - name: search-ml-principles
+    function: search_ml_principles
+    description: "Semantic search over indexed knowledge base"
+    parameters:
+      query:
+        type: string
+      n_results:
+        type: integer
+        default: 5
+
+  - name: get-rdagent-context
+    function: get_rdagent_context
+    description: "Generate context prompt for rdagent"
+    parameters:
+      competition_name:
+        type: string
+      description:
+        type: string
+        default: ""
+
+  - name: list-indexed-chapters
+    function: list_indexed_chapters
+    description: "List all indexed chapters"
+
+  - name: get-indexing-stats
+    function: get_indexing_stats
+    description: "Get indexing statistics"
+
+platforms:
+  openclaw:
+    skill_path: "~/.openclaw/workspace/skills/mlsyseng"
+    config_path: "~/.openclaw/openclaw.json"
+    mcp_config_key: "mcpServers"
+
+  claude_desktop:
+    config_path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+    mcp_config_key: "mcpServers"
+
+  cursor:
+    skill_path: "~/.cursor/skills/mlsyseng"
+
+  gemini:
+    config_path: "~/.gemini/mcp_config.json"
+    mcp_config_key: "mcpServers"
+
+  generic:
+    skill_path: "~/.skills/mlsyseng"

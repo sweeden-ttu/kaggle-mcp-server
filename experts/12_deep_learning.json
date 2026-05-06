@@ -1,0 +1,33 @@
+{
+  "expert_name": "12 Deep Learning",
+  "slug": "12_deep_learning",
+  "capabilities": [
+    "Design deep learning pipelines",
+    "Build and train neural network architectures",
+    "Apply convolutional neural networks for spatial data",
+    "Model sequential data with recurrent networks",
+    "Leverage transformer architectures for sequence tasks",
+    "Apply transfer learning from pre-trained models"
+  ],
+  "skills": [
+    "~/skills/kaggle-deep-learning",
+    "~/skills/kaggle-cnn-trainer",
+    "~/skills/kaggle-rnn-trainer",
+    "~/skills/kaggle-transformer-trainer",
+    "~/skills/kaggle-transfer-learner",
+    "~/skills/kaggle-model-trainer"
+  ],
+  "strategy": "Baseline \u2192 EDA \u2192 Feature Engineering \u2192 Model Selection \u2192 Submit",
+  "formula": {
+    "objective": "minimize_cross_entropy",
+    "function": "L = -\u03a3 y_i log(\u0177_i)",
+    "metrics": ["accuracy", "f1_score", "auc_roc"]
+  },
+  "loop_config": {
+    "objective": "minimize_cross_entropy",
+    "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
+    "epsilon": 0.001,
+    "max_iterations": 10,
+    "patience": 3
+  }
+}

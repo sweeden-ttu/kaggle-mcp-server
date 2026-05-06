@@ -1,5 +1,24 @@
+# Core MCP
 mcp[cli]>=1.0.0
+
+# Kaggle & ML
 kaggle>=1.6.0
+numpy>=1.24.0
+scipy>=1.11.0
+
+# MLSysEng MoE - PDF extraction
+docling>=2.0.0
+PyMuPDF>=1.24.0
+pdfplumber>=0.11.0
+
+# MLSysEng MoE - Embeddings & RAG
+sentence-transformers>=3.0.0
+chromadb>=0.5.0
+
+# MLSysEng MoE - Config
+PyYAML>=6.0.0
+
+# FOL Workbench
 PyQt6>=6.6.0
 z3-solver>=4.13.0
 beautifulsoup4>=4.12.0
@@ -14,6 +33,4 @@ matplotlib>=3.8
 Pillow>=10.0.0
 pytesseract>=0.3.10
 opencv-python>=4.8.0
-numpy>=1.24.0
-scipy>=1.11.0
 mss>=9.0.0

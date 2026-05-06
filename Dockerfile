@@ -31,11 +31,14 @@ RUN mkdir -p /app/storage/local \
     /app/storage/network \
     /app/storage/cloud \
     /app/storage/github \
-    /app/data
+    /app/data \
+    /root/.mlsyseng
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
+ENV SQLITE_DB_PATH=/root/.mlsyseng/mlsyseng.db
+ENV CHROMA_DB_PATH=/root/.mlsyseng/chroma_db
 
 # Expose port (if needed for web interface)
 EXPOSE 8000
