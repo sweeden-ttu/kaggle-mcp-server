@@ -27,7 +27,7 @@ from mlsyseng_mcp.loop_controller import (
 
 mcp = FastMCP(
     "mlsyseng-moe",
-    description="Machine Learning Systems Expert Mixture of Experts - extracts knowledge from ML Principles PDFs, registers chapter experts, and builds Kaggle competition entries using RAG-informed skill selection with state convergence loops.",
+    instructions="Machine Learning Systems Expert Mixture of Experts - extracts knowledge from ML Principles PDFs, registers chapter experts, and builds Kaggle competition entries using RAG-informed skill selection with state convergence loops.",
 )
 
 _embedding_engine: Optional[EmbeddingEngine] = None
@@ -146,8 +146,15 @@ def search_concepts(query: str, n_results: int = 5) -> str:
         query: Search query about ML concepts.
         n_results: Number of results to return (default 5).
     """
-    engine = _get_embedding_engine()
-    results = engine.search(query, n_results=n_results)
+    try:
+        engine = _get_embedding_engine()
+        results = engine.search(query, n_results=n_results)
+    except ImportError as e:
+        return json.dumps({
+            "query": query,
+            "results": [],
+            "error": f"Embedding engine unavailable: {e}. Install sentence-transformers and chromadb.",
+        }, indent=2)
 
     formatted = []
     for r in results:
@@ -209,10 +216,13 @@ def run_rdagent(competition: str, description: str = "") -> str:
         competition: Kaggle competition name.
         description: Brief description of the competition.
     """
-    engine = _get_embedding_engine()
-
     query = f"{competition} {description}"
-    relevant = engine.search(query, n_results=5)
+    relevant = []
+    try:
+        engine = _get_embedding_engine()
+        relevant = engine.search(query, n_results=5)
+    except ImportError:
+        pass
 
     context_parts = []
     for r in relevant:
