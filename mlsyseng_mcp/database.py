@@ -6,7 +6,7 @@ Stores extracted chapter content, expert definitions, and extraction metadata.
 import json
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -98,7 +98,7 @@ class MLSysEngDatabase:
         concepts: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ):
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         with self.conn:
             self.conn.execute(
                 """
@@ -159,7 +159,7 @@ class MLSysEngDatabase:
         loop_config: Optional[Dict[str, Any]] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ):
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         with self.conn:
             self.conn.execute(
                 """
@@ -214,7 +214,7 @@ class MLSysEngDatabase:
     def log_extraction_event(
         self, chapter_id: str, event: str, detail: str = ""
     ):
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         with self.conn:
             self.conn.execute(
                 "INSERT INTO extraction_log (chapter_id, event, detail, timestamp) VALUES (?, ?, ?, ?)",
@@ -244,7 +244,7 @@ class MLSysEngDatabase:
         state_vector: List[float],
         metrics: Optional[Dict[str, Any]] = None,
     ):
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         with self.conn:
             self.conn.execute(
                 """
