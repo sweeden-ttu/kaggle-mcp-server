@@ -1,0 +1,20 @@
+[package]
+name = "kagg"
+version = "0.1.0"
+edition = "2021"
+description = "MLSysEng MoE – Rust equivalent of the Kaggle MCP expert system"
+license = "MIT"
+
+[[bin]]
+name = "kagg"
+path = "src/main.rs"
+
+[dependencies]
+rusqlite = { version = "0.31", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "=4.5.23", features = ["derive"] }
+regex = "1"
+aho-corasick = "1"
+thiserror = "1"
