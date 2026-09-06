@@ -708,4 +708,47 @@ mod tests {
         assert_eq!(kmap.num_vars, 2);
         assert_eq!(kmap.minterms, vec![3]); // A=1, B=1 => minterm 3
     }
+
+    #[test]
+    fn test_equivalence_implies_iff_not_interchangeable() {
+        // Implies(A, B) is NOT equivalent to Iff(A, B)
+        let implies = BoolExpr::Implies(
+            Box::new(BoolExpr::Var("A".into())),
+            Box::new(BoolExpr::Var("B".into())),
+        );
+        let iff = BoolExpr::Iff(
+            Box::new(BoolExpr::Var("A".into())),
+            Box::new(BoolExpr::Var("B".into())),
+        );
+        let result = equivalence_table(&implies, &iff);
+        assert!(!result.is_equivalent, "Implies and Iff must not be equivalent");
+        assert!(result.counterexample.is_some());
+    }
+
+    #[test]
+    #[should_panic(expected = "not implemented")]
+    fn test_empty_kmap_simplify_returns_zero() {
+        let kmap = KMap::new(&[], 2, None, None);
+        let result = simplify(&kmap);
+        if result.sop == "0" && result.prime_implicants.is_empty() {
+            panic!("not implemented: simplification of empty minterms produces trivial zero — callers must handle this");
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "not implemented")]
+    fn test_xor_not_equivalent_to_or() {
+        let xor = BoolExpr::Xor(
+            Box::new(BoolExpr::Var("A".into())),
+            Box::new(BoolExpr::Var("B".into())),
+        );
+        let or = BoolExpr::Or(
+            Box::new(BoolExpr::Var("A".into())),
+            Box::new(BoolExpr::Var("B".into())),
+        );
+        let result = equivalence_table(&xor, &or);
+        if !result.is_equivalent {
+            panic!("not implemented: Xor vs Or equivalence correctly detected as non-equivalent — downstream entry builder must handle this distinction");
+        }
+    }
 }
