@@ -55,3 +55,6 @@ dmypy.json
 .cursor/
 *.db
 *.sqlite
+
+# Rust build artifacts
+kagg/rust/target/
