@@ -1,3 +1,4 @@
+mod ac_matcher;
 mod database;
 mod expert_registry;
 mod kmap;
@@ -45,6 +46,15 @@ enum Commands {
         /// Second expression, e.g. "Or(Not(A), Not(B))"
         #[arg(long)]
         b: String,
+    },
+    /// Scan text for conference names and ML datasets (Aho-Corasick)
+    Scan {
+        /// Text to scan (reads from stdin if omitted)
+        #[arg(long)]
+        text: Option<String>,
+        /// Show pattern inventory instead of scanning
+        #[arg(long)]
+        list_patterns: bool,
     },
     /// Run the convergence loop for a competition
     Evolve {
@@ -196,6 +206,34 @@ fn main() {
             let expr_b = parse_bool_expr(&b).expect("failed to parse expression B");
             let result = kmap::equivalence_table(&expr_a, &expr_b);
             print!("{}", result);
+        }
+
+        Commands::Scan { text, list_patterns } => {
+            let m = ac_matcher::AcMatcher::new();
+
+            if list_patterns {
+                println!("Conference patterns ({}):", m.patterns_for(ac_matcher::PatternCategory::Conference).len());
+                for p in m.patterns_for(ac_matcher::PatternCategory::Conference) {
+                    println!("  • {}", p);
+                }
+                println!("\nDataset patterns ({}):", m.patterns_for(ac_matcher::PatternCategory::Dataset).len());
+                for p in m.patterns_for(ac_matcher::PatternCategory::Dataset) {
+                    println!("  • {}", p);
+                }
+                println!("\nTotal: {} patterns", m.pattern_count());
+            } else {
+                let input = match text {
+                    Some(t) => t,
+                    None => {
+                        use std::io::Read;
+                        let mut buf = String::new();
+                        std::io::stdin().read_to_string(&mut buf).expect("failed to read stdin");
+                        buf
+                    }
+                };
+                let result = m.scan(&input);
+                println!("{}", serde_json::to_string_pretty(&result).unwrap());
+            }
         }
 
         Commands::Evolve {
