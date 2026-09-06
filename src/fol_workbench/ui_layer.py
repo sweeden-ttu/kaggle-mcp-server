@@ -744,10 +744,26 @@ class MainWindow(QMainWindow):
         if validation_info.statistics:
             result_text += "Statistics:\n"
             result_text += "=" * 50 + "\n"
-            for key, value in validation_info.statistics.items():
+            for key, value in self._iter_statistics(validation_info.statistics):
                 result_text += f"  {key}: {value}\n"
         
         self.results_display.setPlainText(result_text)
+
+    @staticmethod
+    def _iter_statistics(statistics):
+        """Yield (key, value) pairs from either a dict or a Z3 Statistics object.
+
+        Z3's Statistics object exposes ``keys()`` and item indexing but not
+        ``items()``, so fall back to that API when the mapping protocol is absent.
+        """
+        try:
+            yield from statistics.items()
+            return
+        except AttributeError:
+            pass
+        get_value = getattr(statistics, "get_key_value", None)
+        for key in statistics.keys():
+            yield key, get_value(key) if get_value else statistics[key]
     
     def _import_smt_lib(self):
         """Import SMT-LIB file."""
