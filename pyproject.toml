@@ -5,7 +5,7 @@ description = "MCP server for interacting with Kaggle API - search competitions,
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "mcp[cli]>=1.0.0",
+    "mcp[cli]>=1.0.0,<2",
     "kaggle>=1.6.0",
     "PyQt6>=6.6.0",
     "z3-solver>=4.13.0",
