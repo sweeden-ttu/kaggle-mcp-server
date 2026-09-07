@@ -1,0 +1,314 @@
+# Kaggriculture Challenge Expert Definitions
+# Game-agent-specific experts for the Kaggriculture simulation competition
+#
+# Kaggriculture is a TURN-BASED FARMING SIMULATION GAME, not a traditional
+# ML/data-science competition. Two AI agents compete head-to-head on separate
+# 10x10 tile farms over 720 turns (30 in-game days × 24 turns/day) to
+# maximize bank balance. The meta is dominated by deterministic "field plan"
+# scripts (~$186k bank), while RL approaches are emerging.
+#
+# Derived from patterns accumulated across ~150 automation branches of the
+# MLSysEng MoE system.
+
+name: kaggriculture-experts
+version: "0.2.0"
+description: >
+  Game-agent experts for the Kaggriculture simulation competition.
+  Each expert maps ML systems engineering knowledge to a specific
+  facet of the farming agent problem.
+
+competition_info:
+  name: Kaggriculture
+  url: https://www.kaggle.com/competitions/kaggriculture
+  type: simulation_agent
+  prize: $50,000 (top 10 × $5,000)
+  deadline: 2026-09-30
+  teams: ~6,480+
+  evaluation: Bradley-Terry skill rating (ELO-like)
+  win_condition: most money in bank after 720 turns
+  current_meta: deterministic field plans (~$186k bank)
+  meta_ceiling: ~$186,991 (Ledger Lena reference agent)
+
+  game_mechanics:
+    grid: 10x10 tiles (four 5x5 quadrants, expandable)
+    turns_per_day: 24
+    total_turns: 720
+    actions_per_turn: [move, buy_seeds, plant, water, fertilize, harvest, sell, hire_farmhand, buy_quadrant]
+    crops: [wheat, carrots, melons]
+    animals: [livestock producing eggs, milk, wool]
+    market: dynamic supply/demand pricing, starts at 10000 inventory per product
+    free_actions: [buy_seeds, sell_inventory]  # no movement cost
+
+experts:
+  - expert_name: "01_Deterministic_Field_Plan"
+    slug: "01_deterministic_field_plan"
+    capabilities:
+      - Fixed 712-turn production scripts
+      - Optimal planting/harvesting/selling sequence
+      - Turn-level action scheduling
+      - Market sell-order optimization
+      - Farmhand hiring and assignment scripting
+    skills:
+      - kaggle-optimizer
+      - kaggle-preprocessor
+    strategy: "Analyze top replays → Extract action sequence → Optimize sell ordering → Hardcode 712-turn script → Submit"
+    formula:
+      objective: maximize_bank_balance
+      function: "Bank = Σ_{t=1}^{720} (sell_revenue_t - buy_cost_t - hire_cost_t)"
+      metrics: [final_bank_balance, win_rate, elo_rating]
+    loop_config:
+      objective: maximize_bank_balance
+      exit_condition: "||state[n] - state[n-1]||_2 < epsilon"
+      epsilon: 0.001
+      max_iterations: 20
+      patience: 3
+    notes: >
+      The current meta. Top ~150 players use byte-identical deterministic
+      scripts. Ceiling is ~$186k bank. To beat this, need either a better
+      deterministic plan or a dynamic agent that adapts to opponent.
+
+  - expert_name: "02_Market_Timing"
+    slug: "02_market_timing"
+    capabilities:
+      - Dynamic price curve analysis (inventory → price mapping)
+      - Sell timing optimization (avoid price floor at $1)
+      - Supply/demand modeling across both players
+      - Concurrent sell order arbitrage
+      - Town building consumption tracking
+    skills:
+      - kaggle-optimizer
+      - kaggle-feature-engineer
+    strategy: "Model price curves → Track market inventory → Time sells to maximize revenue → Avoid dumping below floor"
+    formula:
+      objective: maximize_sell_revenue
+      function: "Revenue = Σ price(inventory_t) * quantity_t; price drops as inventory rises"
+      metrics: [total_revenue, avg_sell_price, price_floor_avoidance_rate]
+    loop_config:
+      objective: maximize_sell_revenue
+      exit_condition: "||state[n] - state[n-1]||_2 < epsilon"
+      epsilon: 0.001
+      max_iterations: 15
+      patience: 3
+
+  - expert_name: "03_Spatial_Pathfinding"
+    slug: "03_spatial_pathfinding"
+    capabilities:
+      - Manhattan distance / BFS shortest path on tile grid
+      - Priority-based tile selection (harvest > water > weed > plant)
+      - Farmhand route optimization (minimize idle turns)
+      - Quadrant purchase timing (ROI analysis)
+      - Multi-agent coordination (player + farmhands)
+    skills:
+      - kaggle-preprocessor
+      - kaggle-optimizer
+    strategy: "BFS pathfinding → Priority queue of tasks → Assign nearest farmhand → Minimize wasted movement"
+    formula:
+      objective: minimize_wasted_turns
+      function: "Waste = Σ (turns_moving + turns_idle) / total_turns"
+      metrics: [action_efficiency, tiles_visited_per_turn, harvest_timeliness]
+    loop_config:
+      objective: minimize_wasted_turns
+      exit_condition: "||state[n] - state[n-1]||_2 < epsilon"
+      epsilon: 0.001
+      max_iterations: 10
+      patience: 3
+
+  - expert_name: "04_Crop_Economics"
+    slug: "04_crop_economics"
+    capabilities:
+      - Per-crop profitability analysis (growth time vs sell price vs seed cost)
+      - Fertilizer ROI calculation (doubles yield for 3 days)
+      - Crop rotation planning across 30-day season
+      - Wheat feed chain for livestock optimization
+      - Premium crop timing (melons for high margins)
+    skills:
+      - kaggle-feature-engineer
+      - kaggle-optimizer
+    strategy: "Compute crop NPV → Prioritize melons early → Wheat for feed chain → Fertilize high-value plots → Sell at peak prices"
+    formula:
+      objective: maximize_profit_per_tile
+      function: "Profit = sell_price * yield * fertilizer_bonus - seed_cost - labor_cost"
+      metrics: [profit_per_tile, crop_rotation_efficiency, fertilizer_roi]
+    loop_config:
+      objective: maximize_profit_per_tile
+      exit_condition: "||state[n] - state[n-1]||_2 < epsilon"
+      epsilon: 0.001
+      max_iterations: 12
+      patience: 3
+
+  - expert_name: "05_Livestock_Management"
+    slug: "05_livestock_management"
+    capabilities:
+      - Animal product cycle management (eggs, milk, wool)
+      - Wheat feed chain (grow wheat → feed animals → collect products)
+      - Fertilizer collection from animals
+      - Livestock vs crop ROI comparison
+      - Scaling livestock operations with farmhands
+    skills:
+      - kaggle-model-trainer
+      - kaggle-optimizer
+    strategy: "Buy livestock → Establish wheat feed chain → Collect products → Sell products → Scale with farmhands"
+    formula:
+      objective: maximize_livestock_roi
+      function: "ROI = (Σ product_revenue - feed_cost - purchase_cost) / total_investment"
+      metrics: [livestock_roi, product_yield_rate, feed_efficiency]
+    loop_config:
+      objective: maximize_livestock_roi
+      exit_condition: "||state[n] - state[n-1]||_2 < epsilon"
+      epsilon: 0.001
+      max_iterations: 10
+      patience: 3
+    notes: >
+      Rancher Rita reference agent achieves ~$53k with livestock at scale.
+      The jump to $186k requires field plan optimization on top.
+
+  - expert_name: "06_Reinforcement_Learning"
+    slug: "06_reinforcement_learning"
+    capabilities:
+      - PPO (Proximal Policy Optimization) training
+      - JAX-based fast simulation (~10k steps/sec)
+      - Self-play training (50% self, 25% active opp, 25% banked)
+      - Reward shaping (terminal cash + production diversity bonuses)
+      - Behavior mimicry / imitation learning for initialization
+      - Hybrid CEO/executor architecture
+    skills:
+      - kaggle-deep-learning
+      - kaggle-model-trainer
+      - kaggle-optimizer
+      - kaggle-rl
+    strategy: "Imitation learning from top replays → PPO self-play → Reward shaping → Hybrid CEO (RL) + executor (deterministic) → Evaluate vs meta"
+    formula:
+      objective: maximize_expected_return
+      function: "J(π) = E[Σ γ^t r_t]; r_t = bank_delta_t + diversity_bonus_t"
+      metrics: [win_rate_vs_meta, elo_rating, mean_bank_balance, training_reward]
+    loop_config:
+      objective: maximize_expected_return
+      exit_condition: "||state[n] - state[n-1]||_2 < epsilon"
+      epsilon: 0.0005
+      max_iterations: 30
+      patience: 5
+    notes: >
+      RL is the most promising path to break the deterministic meta.
+      Key challenge: action space is huge (move + many tile interactions).
+      Hybrid approach recommended: RL for high-level decisions, deterministic
+      executor for micro-logistics.
+
+  - expert_name: "07_Replay_Analysis"
+    slug: "07_replay_analysis"
+    capabilities:
+      - Episode JSON replay parsing
+      - Strategy fingerprinting (detect meta clones)
+      - Action sequence extraction from top agents
+      - Price curve reconstruction from replays
+      - Opponent modeling from observed behavior
+    skills:
+      - kaggle-preprocessor
+      - kaggle-feature-engineer
+      - kaggle-validator
+    strategy: "Download episode replays → Parse action sequences → Fingerprint strategies → Extract best patterns → Model opponent behavior"
+    formula:
+      objective: maximize_replay_insight
+      function: "Insight = f(action_entropy, bank_correlation, meta_deviation)"
+      metrics: [strategy_diversity_detected, top_action_patterns, price_model_accuracy]
+    loop_config:
+      objective: maximize_replay_insight
+      exit_condition: "||state[n] - state[n-1]||_2 < epsilon"
+      epsilon: 0.001
+      max_iterations: 10
+      patience: 3
+
+  - expert_name: "08_Opponent_Adaptation"
+    slug: "08_opponent_adaptation"
+    capabilities:
+      - Real-time opponent observation during game
+      - Adaptive strategy switching based on opponent type
+      - Game theory (Nash equilibria for market competition)
+      - Counter-strategies for deterministic meta agents
+      - Endgame tree search for final-turn optimization
+    skills:
+      - kaggle-model-trainer
+      - kaggle-optimizer
+      - kaggle-rl
+    strategy: "Observe opponent early turns → Classify strategy → Switch to counter-strategy → Endgame tree search → Maximize final bank"
+    formula:
+      objective: maximize_win_probability
+      function: "P(win) = f(my_strategy, opponent_strategy, market_state)"
+      metrics: [win_rate, elo_gain, adaptive_accuracy]
+    loop_config:
+      objective: maximize_win_probability
+      exit_condition: "||state[n] - state[n-1]||_2 < epsilon"
+      epsilon: 0.001
+      max_iterations: 15
+      patience: 3
+    notes: >
+      This is the key differentiator beyond the meta. If you can detect
+      that your opponent is running a deterministic script, you can time
+      your sells to exploit their fixed schedule.
+
+convergence_pipeline:
+  description: >
+    Run experts in phases, with the convergence loop refining the
+    overall agent strategy until stable. The GBDT router selects
+    which experts are most relevant for the current development phase.
+  phases:
+    - name: replay_intelligence
+      experts: ["07_replay_analysis"]
+      description: "Parse top episode replays, extract meta field plans, fingerprint strategies"
+    - name: economic_modeling
+      experts: ["02_market_timing", "04_crop_economics", "05_livestock_management"]
+      description: "Model price curves, compute crop/livestock ROI, optimize sell timing"
+    - name: agent_core
+      experts: ["01_deterministic_field_plan", "03_spatial_pathfinding"]
+      description: "Build deterministic baseline agent with optimized pathfinding"
+    - name: learning
+      experts: ["06_reinforcement_learning"]
+      description: "Train RL agent via imitation learning + PPO self-play"
+    - name: adaptation
+      experts: ["08_opponent_adaptation"]
+      description: "Add opponent modeling and adaptive strategy switching"
+
+reference_tiers:
+  description: >
+    The competition includes 10 reference agents forming a skill ladder.
+    Each tier represents a qualitative jump in strategy sophistication.
+  tiers:
+    - tier: 0
+      name: "Fallow Finn"
+      strategy: "Never plants"
+      bank: 3000
+    - tier: 1
+      name: "Wheat Walter"
+      strategy: "One farmer, wheat only"
+      bank: 7200
+    - tier: 2
+      name: "Rotation Rosa"
+      strategy: "Three-crop rotation with help"
+      bank: 12300
+    - tier: 3
+      name: "Homestead Hana"
+      strategy: "Buys quadrant, scales staples"
+      bank: 16700
+    - tier: 4
+      name: "Melon Mateo"
+      strategy: "Premium crop, refuses to dump below floor"
+      bank: 44000
+    - tier: 5
+      name: "Rancher Rita"
+      strategy: "Livestock at scale, wheat feed chain"
+      bank: 53000
+    - tier: 6
+      name: "Broker Bea"
+      strategy: "Meta field plan, opportunistic wheat timing"
+      bank: 186766
+    - tier: 7
+      name: "Ledger Lena"
+      strategy: "Meta field plan, different sell ordering"
+      bank: 186991
+    - tier: 8
+      name: "Slotter Silas"
+      strategy: "Meta field plan, reordered SELL layer"
+      bank: 185853
+    - tier: 9
+      name: "Closer Cleo"
+      strategy: "Meta field plan, sells reordered in place"
+      bank: 186198
