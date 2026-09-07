@@ -32,55 +32,57 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 # ---------------------------------------------------------------------------
 
 AGRICULTURE_CONCEPTS = {
-    "remote_sensing": [
-        "satellite", "sentinel", "landsat", "modis", "ndvi", "evi",
-        "spectral", "band", "raster", "imagery", "pixel", "resolution",
+    "deterministic_plan": [
+        "deterministic", "field plan", "script", "hardcode", "fixed",
+        "replay", "action sequence", "turn script", "meta", "712 turn",
+        "production schedule", "sell order",
     ],
-    "crop_science": [
-        "crop", "yield", "harvest", "planting", "germination", "phenology",
-        "growing degree", "biomass", "canopy", "leaf area", "chlorophyll",
+    "market_timing": [
+        "market", "price", "sell", "buy", "inventory", "supply", "demand",
+        "price curve", "price floor", "revenue", "timing", "arbitrage",
+        "concurrent", "town building", "consumption",
     ],
-    "soil": [
-        "soil", "ph", "nitrogen", "phosphorus", "potassium", "organic matter",
-        "texture", "moisture", "drainage", "clay", "sand", "silt",
+    "pathfinding": [
+        "pathfinding", "bfs", "manhattan", "grid", "tile", "move",
+        "shortest path", "route", "farmhand", "assignment", "movement",
+        "spatial", "quadrant", "coordinate",
     ],
-    "weather": [
-        "temperature", "precipitation", "rainfall", "humidity", "wind",
-        "solar radiation", "evapotranspiration", "frost", "drought",
+    "crop_economics": [
+        "crop", "wheat", "carrot", "melon", "seed", "plant", "harvest",
+        "water", "fertilize", "yield", "growth", "profitability",
+        "rotation", "premium", "feed chain",
     ],
-    "geospatial": [
-        "latitude", "longitude", "elevation", "slope", "aspect",
-        "coordinate", "spatial", "geographic", "region", "zone",
+    "livestock": [
+        "livestock", "animal", "egg", "milk", "wool", "feed",
+        "rancher", "product", "care", "scale",
     ],
-    "time_series": [
-        "temporal", "seasonal", "trend", "lag", "rolling", "window",
-        "decomposition", "periodicity", "autoregressive",
+    "reinforcement_learning": [
+        "reinforcement learning", "rl", "ppo", "policy", "reward",
+        "self-play", "training", "jax", "imitation", "agent",
+        "behavior", "episode", "discount", "gamma",
     ],
-    "tabular_ml": [
-        "gradient boosting", "xgboost", "lightgbm", "catboost", "random forest",
-        "feature importance", "shap", "permutation", "cross validation",
+    "replay_analysis": [
+        "replay", "episode", "fingerprint", "parse", "json",
+        "action log", "strategy detection", "clone", "pattern",
+        "telemetry", "benchmark",
     ],
-    "deep_learning": [
-        "cnn", "convolutional", "resnet", "unet", "transformer", "attention",
-        "lstm", "gru", "pretrained", "fine-tune", "transfer learning",
-    ],
-    "ensemble": [
-        "ensemble", "stacking", "blending", "weighted average", "voting",
-        "bagging", "boosting", "diversity", "out-of-fold",
+    "opponent_adaptation": [
+        "opponent", "adapt", "counter", "game theory", "nash",
+        "observe", "classify", "switch", "endgame", "tree search",
+        "exploit", "dynamic", "respond",
     ],
 }
 
-# Maps agriculture concepts to the MoE skill paths (from expert_registry.py)
+# Maps game-agent domains to the MoE skill paths
 AGRICULTURE_SKILL_MAP = {
-    "remote_sensing": ["kaggle-preprocessor", "kaggle-feature-engineer", "kaggle-deep-learning"],
-    "crop_science": ["kaggle-model-trainer", "kaggle-feature-engineer"],
-    "soil": ["kaggle-feature-engineer", "kaggle-preprocessor"],
-    "weather": ["kaggle-feature-engineer", "kaggle-preprocessor"],
-    "geospatial": ["kaggle-validator", "kaggle-preprocessor"],
-    "time_series": ["kaggle-deep-learning", "kaggle-feature-engineer"],
-    "tabular_ml": ["kaggle-ensemble", "kaggle-model-trainer", "kaggle-optimizer"],
-    "deep_learning": ["kaggle-deep-learning", "kaggle-model-trainer"],
-    "ensemble": ["kaggle-ensemble", "kaggle-optimizer"],
+    "deterministic_plan": ["kaggle-optimizer", "kaggle-preprocessor"],
+    "market_timing": ["kaggle-optimizer", "kaggle-feature-engineer"],
+    "pathfinding": ["kaggle-preprocessor", "kaggle-optimizer"],
+    "crop_economics": ["kaggle-feature-engineer", "kaggle-optimizer"],
+    "livestock": ["kaggle-model-trainer", "kaggle-optimizer"],
+    "reinforcement_learning": ["kaggle-deep-learning", "kaggle-model-trainer", "kaggle-optimizer", "kaggle-rl"],
+    "replay_analysis": ["kaggle-preprocessor", "kaggle-feature-engineer", "kaggle-validator"],
+    "opponent_adaptation": ["kaggle-model-trainer", "kaggle-optimizer", "kaggle-rl"],
 }
 
 
@@ -385,42 +387,53 @@ class GBDTExpertRouter:
 
     def _infer_objective(self, top_domain: str) -> str:
         obj_map = {
-            "crop_science": "minimize_cross_entropy_loss",
-            "remote_sensing": "minimize_rmse",
-            "soil": "minimize_rmse",
-            "weather": "minimize_mse",
-            "time_series": "minimize_mse",
-            "tabular_ml": "minimize_validation_loss",
-            "deep_learning": "minimize_validation_loss",
-            "ensemble": "minimize_validation_loss",
-            "geospatial": "minimize_cv_variance",
+            "deterministic_plan": "maximize_bank_balance",
+            "market_timing": "maximize_sell_revenue",
+            "pathfinding": "minimize_wasted_turns",
+            "crop_economics": "maximize_profit_per_tile",
+            "livestock": "maximize_livestock_roi",
+            "reinforcement_learning": "maximize_expected_return",
+            "replay_analysis": "maximize_replay_insight",
+            "opponent_adaptation": "maximize_win_probability",
         }
-        return obj_map.get(top_domain, "minimize_validation_loss")
+        return obj_map.get(top_domain, "maximize_bank_balance")
 
     def _infer_formula(self, top_domain: str) -> Dict[str, Any]:
         formulas = {
-            "crop_science": {
-                "function": "L = -Σ yᵢ * log(ŷᵢ)",
-                "metrics": ["accuracy", "f1_score", "cohen_kappa"],
+            "deterministic_plan": {
+                "function": "Bank = Σ_{t=1}^{720} (sell_revenue_t - buy_cost_t - hire_cost_t)",
+                "metrics": ["final_bank_balance", "win_rate", "elo_rating"],
             },
-            "remote_sensing": {
-                "function": "NDVI = (NIR - Red) / (NIR + Red); L = RMSE(y, ŷ)",
-                "metrics": ["rmse", "mae", "r2_score"],
+            "market_timing": {
+                "function": "Revenue = Σ price(inventory_t) * quantity_t",
+                "metrics": ["total_revenue", "avg_sell_price", "price_floor_avoidance"],
             },
-            "soil": {
-                "function": "L = (1/n) * Σ (yᵢ - ŷᵢ)²",
-                "metrics": ["rmse", "mae", "r2_score"],
+            "pathfinding": {
+                "function": "Waste = Σ (turns_moving + turns_idle) / total_turns",
+                "metrics": ["action_efficiency", "harvest_timeliness"],
             },
-            "tabular_ml": {
-                "function": "L = f(X, θ, α) via gradient boosting",
-                "metrics": ["rmse", "mae", "competition_metric"],
+            "crop_economics": {
+                "function": "Profit = sell_price * yield * fertilizer_bonus - seed_cost",
+                "metrics": ["profit_per_tile", "crop_rotation_efficiency"],
             },
-            "ensemble": {
-                "function": "ŷ = Σ wᵢ * fᵢ(X), s.t. Σ wᵢ = 1",
-                "metrics": ["competition_metric", "ensemble_diversity"],
+            "livestock": {
+                "function": "ROI = (product_revenue - feed_cost - purchase_cost) / investment",
+                "metrics": ["livestock_roi", "feed_efficiency"],
+            },
+            "reinforcement_learning": {
+                "function": "J(π) = E[Σ γ^t r_t]; r_t = bank_delta_t + diversity_bonus_t",
+                "metrics": ["win_rate_vs_meta", "elo_rating", "training_reward"],
+            },
+            "replay_analysis": {
+                "function": "Insight = f(action_entropy, bank_correlation, meta_deviation)",
+                "metrics": ["strategy_diversity", "top_action_patterns"],
+            },
+            "opponent_adaptation": {
+                "function": "P(win) = f(my_strategy, opponent_strategy, market_state)",
+                "metrics": ["win_rate", "elo_gain", "adaptive_accuracy"],
             },
         }
-        return formulas.get(top_domain, formulas["tabular_ml"])
+        return formulas.get(top_domain, formulas["deterministic_plan"])
 
     def explain(self, query: str) -> str:
         """Human-readable explanation of the routing decision."""
@@ -470,11 +483,11 @@ def main():
     router.fit()
 
     queries = [
-        "Predict crop yield from satellite imagery and soil data for the kaggriculture challenge",
-        "Classify crop types using Sentinel-2 time series with spatial cross-validation",
-        "Build an ensemble of gradient boosted trees for tabular agriculture features",
-        "Use NDVI temporal profiles and weather data to predict harvest date",
-        "Feature engineering for soil properties combined with remote sensing indices",
+        "Build a deterministic field plan agent that maximizes bank balance over 720 turns",
+        "Train a PPO reinforcement learning agent with self-play to beat the meta",
+        "Optimize market sell timing to maximize revenue before hitting the price floor",
+        "Analyze top episode replays to extract winning action sequences and fingerprint strategies",
+        "Build an adaptive agent that observes the opponent and switches counter-strategies",
     ]
 
     if len(sys.argv) > 1:

@@ -1,10 +1,26 @@
 # Kaggriculture Challenge: ML Knowledge Pipeline
 
+## What Kaggriculture Actually Is
+
+**Kaggriculture is NOT a traditional ML/data-science competition.** It is a **turn-based farming simulation game** where two autonomous AI agents compete head-to-head on separate 10x10 tile farms over **720 turns** (30 in-game days × 24 turns/day). The agent with the most **money in the bank** at the end wins.
+
+| Key Fact | Value |
+|----------|-------|
+| URL | [kaggle.com/competitions/kaggriculture](https://www.kaggle.com/competitions/kaggriculture) |
+| Prize | $50,000 (top 10 × $5,000) |
+| Teams | ~6,480+ |
+| Deadline | September 30, 2026 |
+| Evaluation | Bradley-Terry skill rating (ELO-like) |
+| Current meta | Deterministic "field plan" scripts (~$186k bank) |
+| RL ceiling | Emerging PPO/JAX approaches |
+
+**Game mechanics**: Move on grid, buy seeds/animals, plant, water, fertilize, harvest, sell at dynamic market prices, hire farmhands, buy land quadrants. Market prices are supply/demand driven (start at 10k inventory, prices drop as inventory rises).
+
 ## What This Document Is
 
 Over the past 3-4 months, approximately **150 automation branches** (`competition-mlsyseng-moe-system-*` and `sweeden-ttu/mlsyseng-moe-system-*`) ran on this repository, iteratively building an **MLSysEng Mixture of Experts** (MoE) system. Each run attempted to construct a pipeline for extracting ML knowledge from textbook PDFs, registering chapter-level experts, and using those experts to build Kaggle competition entries.
 
-This document distills the accumulated knowledge, architecture patterns, and operational code from those 150+ runs into a single actionable pipeline for the **Kaggriculture** challenge.
+This document distills the accumulated knowledge, architecture patterns, and operational code from those 150+ runs into a single actionable pipeline for the **Kaggriculture** challenge. The MoE system's expert routing, convergence loops, and skill mapping have been retargeted from traditional ML domains to **game-agent AI domains** (deterministic planning, RL, market timing, pathfinding, opponent adaptation).
 
 ---
 
@@ -189,152 +205,90 @@ The FOL Workbench contains a rich ML strategy system already on main:
 
 ## 7. Applying This to the Kaggriculture Challenge
 
-### 7.1 Recommended Pipeline
+### 7.1 The Competition Landscape
+
+The competition has a clear skill ladder (reference agents):
+
+| Tier | Agent | Strategy | Bank |
+|------|-------|----------|------|
+| 0-3 | Basic agents | Simple farming | $3k-$17k |
+| 4-5 | Melon Mateo / Rancher Rita | Premium crops / livestock | $44k-$53k |
+| 6-9 | Meta field plans | Deterministic 712-turn scripts | **$186k** |
+
+The **3.5× jump** from tier 5 to tier 6 is the meta barrier. Top ~150 players run byte-identical deterministic scripts.
+
+### 7.2 Recommended Pipeline
 
 ```
-Phase 1: Data Acquisition
-  ├── Use Kaggle MCP tools to download competition data
-  ├── list_competitions(search="agriculture") or by slug
-  ├── download_competition_files(competition="kaggriculture")
-  └── list_kernels(competition="kaggriculture", sort_by="voteCount")
+Phase 1: Replay Intelligence
+  ├── Download episode replays (kaggriculture-episodes dataset)
+  ├── Parse action sequences from top-rated agents
+  ├── Fingerprint strategies (detect meta clones)
+  └── Extract the "meta field plan" action sequence
 
-Phase 2: Expert Assembly
-  ├── Run extract_knowledge() to index any ML reference material
-  ├── Register experts relevant to agriculture ML:
-  │     - Remote sensing / satellite imagery expert
-  │     - Tabular data / feature engineering expert
-  │     - Time series / temporal patterns expert
-  │     - Ensemble methods expert
-  │     - Cross-validation / geospatial-aware splitting expert
-  └── build_entry(competition="kaggriculture")
+Phase 2: Economic Modeling
+  ├── Model dynamic price curves (inventory → price mapping)
+  ├── Compute per-crop ROI (wheat vs carrots vs melons)
+  ├── Analyze fertilizer economics (+yield for 3 days)
+  ├── Map livestock feed chains (wheat → animals → products)
+  └── Identify optimal sell timing windows
 
-Phase 3: Feature Engineering (using accumulated patterns)
-  ├── Bayesian Feature Extractor layers:
-  │     Layer 1: Raw agricultural features (soil, weather, satellite bands)
-  │     Layer 2: Derived features (vegetation indices, temporal aggregates)
-  │     Layer 3: Interaction features (soil × weather, NDVI trends)
-  ├── Aho-Corasick scanner to identify relevant concepts in literature
-  └── K-map simplification for boolean feature selection logic
+Phase 3: Deterministic Baseline Agent
+  ├── Implement the meta field plan (~$186k bank)
+  ├── BFS pathfinding on tile grid
+  ├── Priority-based task assignment (harvest > water > plant)
+  ├── Farmhand route optimization
+  └── Sell order optimization (the key differentiator at tier 6-9)
 
-Phase 4: Model Selection & Training
-  ├── Formula templates matched to task type:
-  │     - Classification → cross-entropy + F1
-  │     - Regression → MSE + RMSE
-  │     - Ranking → custom metric from competition
-  ├── Skill mapping: ensemble, deep-learning, optimizer
-  └── Convergence loop to iteratively refine approach
+Phase 4: Reinforcement Learning (to break the meta)
+  ├── Imitation learning from top replay action sequences
+  ├── PPO training with JAX (~10k steps/sec)
+  ├── Self-play: 50% self, 25% active opponent, 25% banked
+  ├── Reward: terminal cash + production diversity bonuses
+  └── Hybrid: RL "CEO" for high-level decisions + deterministic executor
 
-Phase 5: Iterative Refinement
-  ├── Run evolve(competition="kaggriculture", max_iterations=10, epsilon=0.001)
-  ├── Each iteration:
-  │     1. Expert scoring against current state
-  │     2. Skill activation based on scores
-  │     3. State vector update
-  │     4. L2 convergence check
-  └── Output: converged expert consensus on approach
+Phase 5: Opponent Adaptation
+  ├── Observe opponent's early turns
+  ├── Classify opponent strategy (meta clone? RL? basic?)
+  ├── Switch to counter-strategy
+  ├── Endgame tree search for final-turn optimization
+  └── Exploit deterministic opponents via market timing
 
-Phase 6: Submission
-  ├── Generate notebook via KaggleNotebookGenerator
-  ├── Validate with reverse simulation (predict inputs from outputs)
-  └── Submit via Kaggle API
+Phase 6: Convergence & Submission
+  ├── Run GBDT router + convergence loop
+  ├── Each iteration refines expert scores and skill activations
+  ├── Converge on optimal agent configuration
+  └── Submit via Kaggle
 ```
 
-### 7.2 Agriculture-Specific Expert Definitions
+### 7.3 Expert Definitions (Game-Agent Domains)
 
-Based on the expert registry patterns, here are recommended experts for agriculture ML:
+See `kaggriculture_experts.yaml` for full definitions. The 8 experts are:
 
-```yaml
-experts:
-  - name: "Remote Sensing Expert"
-    slug: "remote_sensing"
-    capabilities:
-      - Satellite imagery processing (Sentinel-2, Landsat)
-      - Vegetation index computation (NDVI, EVI, SAVI)
-      - Spectral band analysis and combination
-      - Cloud masking and atmospheric correction
-    skills:
-      - kaggle-preprocessor
-      - kaggle-feature-engineer
-      - kaggle-deep-learning
-    formula:
-      objective: minimize_rmse
-      function: "NDVI = (NIR - Red) / (NIR + Red)"
-      metrics: [rmse, mae, r2_score]
+| Expert | Domain | Objective |
+|--------|--------|-----------|
+| Deterministic Field Plan | Fixed 712-turn scripts | maximize_bank_balance |
+| Market Timing | Price curve optimization | maximize_sell_revenue |
+| Spatial Pathfinding | Grid movement, farmhand routing | minimize_wasted_turns |
+| Crop Economics | Per-crop ROI, fertilizer, rotation | maximize_profit_per_tile |
+| Livestock Management | Animals, feed chains, products | maximize_livestock_roi |
+| Reinforcement Learning | PPO, self-play, hybrid architecture | maximize_expected_return |
+| Replay Analysis | Episode parsing, strategy fingerprinting | maximize_replay_insight |
+| Opponent Adaptation | Counter-strategies, game theory | maximize_win_probability |
 
-  - name: "Crop Classification Expert"
-    slug: "crop_classification"
-    capabilities:
-      - Multi-class crop type classification
-      - Temporal pattern recognition (phenology)
-      - Transfer learning from ImageNet to agriculture
-    skills:
-      - kaggle-deep-learning
-      - kaggle-model-trainer
-      - kaggle-validator
-    formula:
-      objective: minimize_cross_entropy_loss
-      function: "L = -Σ yᵢ * log(ŷᵢ)"
-      metrics: [accuracy, f1_score, cohen_kappa]
-
-  - name: "Tabular Agriculture Expert"
-    slug: "tabular_agriculture"
-    capabilities:
-      - Soil property prediction (pH, nutrients, organic matter)
-      - Weather data integration and lag features
-      - Geospatial feature engineering
-      - Gradient boosting for tabular data
-    skills:
-      - kaggle-feature-engineer
-      - kaggle-ensemble
-      - kaggle-preprocessor
-    formula:
-      objective: minimize_validation_loss
-      function: "L = f(X_soil, X_weather, X_temporal, θ)"
-      metrics: [rmse, mae, r2_score]
-
-  - name: "Ensemble Synthesis Expert"
-    slug: "ensemble_synthesis"
-    capabilities:
-      - Stacking and blending diverse models
-      - Weighted ensemble optimization
-      - Out-of-fold prediction generation
-      - Diversity-aware model selection
-    skills:
-      - kaggle-ensemble
-      - kaggle-optimizer
-      - kaggle-validator
-    formula:
-      objective: minimize_validation_loss
-      function: "ŷ = Σ wᵢ * fᵢ(X), subject to Σ wᵢ = 1"
-      metrics: [competition_metric]
-
-  - name: "Geospatial Validation Expert"
-    slug: "geospatial_validation"
-    capabilities:
-      - Spatial cross-validation (blocked, buffered)
-      - Temporal holdout strategies
-      - Leakage detection in geospatial data
-      - Stratified sampling by region/climate
-    skills:
-      - kaggle-validator
-      - kaggle-preprocessor
-    strategy: "Spatial-block CV → Temporal holdout → Ensemble → Submit"
-```
-
-### 7.3 Key Convergence Loop Configuration for Agriculture
+### 7.4 Convergence Loop Configuration
 
 ```python
-agriculture_loop_config = {
-    "objective": "minimize_competition_metric",
+kaggriculture_loop_config = {
+    "objective": "maximize_bank_balance",
     "exit_condition": "||state[n] - state[n-1]||_2 < epsilon",
     "epsilon": 0.001,
-    "max_iterations": 15,  # agriculture data is complex, allow more iterations
+    "max_iterations": 25,
     "patience": 3,
     "state_dimensions": [
-        "feature_importance_vector",
-        "model_performance_scores",
-        "ensemble_weight_distribution",
-        "validation_stability_metric"
+        "expert_domain_scores",      # 8 dimensions (one per domain)
+        "skill_activation_levels",   # 7 dimensions (one per kaggle-skill)
+        "expert_contribution_scores" # 8 dimensions (one per expert)
     ]
 }
 ```

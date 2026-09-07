@@ -93,17 +93,16 @@ def load_experts(path: str = "kaggriculture_experts.yaml") -> Dict[str, Dict[str
 def domain_to_expert_slug(domain: str) -> str:
     """Map a GBDT domain name to the nearest expert slug."""
     mapping = {
-        "remote_sensing": "01_remote_sensing",
-        "crop_science": "02_crop_classification",
-        "soil": "03_tabular_agriculture",
-        "weather": "03_tabular_agriculture",
-        "geospatial": "05_geospatial_validation",
-        "time_series": "04_time_series_phenology",
-        "tabular_ml": "03_tabular_agriculture",
-        "deep_learning": "02_crop_classification",
-        "ensemble": "06_ensemble_synthesis",
+        "deterministic_plan": "01_deterministic_field_plan",
+        "market_timing": "02_market_timing",
+        "pathfinding": "03_spatial_pathfinding",
+        "crop_economics": "04_crop_economics",
+        "livestock": "05_livestock_management",
+        "reinforcement_learning": "06_reinforcement_learning",
+        "replay_analysis": "07_replay_analysis",
+        "opponent_adaptation": "08_opponent_adaptation",
     }
-    return mapping.get(domain, "03_tabular_agriculture")
+    return mapping.get(domain, "01_deterministic_field_plan")
 
 
 # ---------------------------------------------------------------------------
@@ -285,20 +284,34 @@ class KaggriculturePipeline:
 
         ordered = [
             p for p in [
-                "Band selection", "Index computation", "Temporal compositing",
-                "Temporal decomposition", "Phenology features",
-                "EDA", "Feature engineering", "Compute all features",
-                "Rank by importance", "Remove redundant",
-                "Spatial-block CV (5-fold)", "Spatial-block CV",
-                "Temporal holdout", "Leakage audit",
-                "Baseline CNN", "Temporal features", "Transfer learning",
-                "Baseline regression", "Add weather interactions", "Add soil features",
-                "LightGBM baseline", "XGBoost", "CatBoost",
-                "LSTM baseline", "Transformer",
-                "Train diverse base models", "Generate OOF predictions",
-                "Optimize weights", "Stack",
-                "Ensemble", "Final ensemble",
-                "Quantile regression",
+                # Replay intelligence
+                "Download episode replays", "Parse action sequences",
+                "Fingerprint strategies", "Extract best patterns",
+                "Model opponent behavior",
+                # Economic modeling
+                "Model price curves", "Track market inventory",
+                "Time sells to maximize revenue", "Avoid dumping below floor",
+                "Compute crop NPV", "Prioritize melons early",
+                "Wheat for feed chain", "Fertilize high-value plots",
+                "Sell at peak prices",
+                # Livestock
+                "Buy livestock", "Establish wheat feed chain",
+                "Collect products", "Sell products", "Scale with farmhands",
+                # Agent core
+                "Analyze top replays", "Extract action sequence",
+                "Optimize sell ordering", "Hardcode 712-turn script",
+                "BFS pathfinding", "Priority queue of tasks",
+                "Assign nearest farmhand", "Minimize wasted movement",
+                # RL
+                "Imitation learning from top replays", "PPO self-play",
+                "Reward shaping",
+                "Hybrid CEO (RL) + executor (deterministic)",
+                "Evaluate vs meta",
+                # Adaptation
+                "Observe opponent early turns", "Classify strategy",
+                "Switch to counter-strategy", "Endgame tree search",
+                "Maximize final bank",
+                # Submit
                 "Submit",
             ]
             if p in phases
@@ -314,9 +327,9 @@ def main():
     pipeline = KaggriculturePipeline()
 
     queries = [
-        "Predict crop yield from satellite imagery, soil properties, and weather data",
-        "Classify crop types from Sentinel-2 NDVI time series with spatial cross-validation",
-        "Build gradient boosted ensemble for tabular agriculture features with feature selection",
+        "Build a deterministic field plan agent that maximizes bank balance with optimal sell timing",
+        "Train a PPO reinforcement learning agent with self-play and imitation learning from top replays",
+        "Analyze episode replays to fingerprint strategies and build an adaptive opponent counter-agent",
     ]
 
     if len(sys.argv) > 1:
