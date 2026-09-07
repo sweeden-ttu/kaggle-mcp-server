@@ -1,0 +1,224 @@
+# Kaggriculture Challenge Expert Definitions
+# Agriculture-specific experts for the MLSysEng MoE system
+# Derived from patterns accumulated across ~150 automation branches
+
+name: kaggriculture-experts
+version: "0.1.0"
+description: >
+  Agriculture-specific expert definitions for the Kaggriculture challenge.
+  Each expert maps ML knowledge domains to agricultural data science tasks.
+
+experts:
+  - expert_name: "01_Remote_Sensing"
+    slug: "01_remote_sensing"
+    capabilities:
+      - Satellite imagery processing (Sentinel-2, Landsat, MODIS)
+      - Vegetation index computation (NDVI, EVI, SAVI, GNDVI)
+      - Spectral band combination and ratio features
+      - Cloud masking and atmospheric correction
+      - Multi-temporal composite generation
+    skills:
+      - kaggle-preprocessor
+      - kaggle-feature-engineer
+      - kaggle-deep-learning
+    strategy: "Band selection → Index computation → Temporal compositing → Feature extraction → Model input"
+    formula:
+      objective: minimize_rmse
+      function: "NDVI = (B8 - B4) / (B8 + B4); EVI = 2.5 * (B8 - B4) / (B8 + 6*B4 - 7.5*B2 + 1)"
+      metrics: [rmse, mae, r2_score]
+    loop_config:
+      objective: minimize_validation_loss
+      exit_condition: "||state[n] - state[n-1]||_2 < epsilon"
+      epsilon: 0.001
+      max_iterations: 10
+      patience: 3
+
+  - expert_name: "02_Crop_Classification"
+    slug: "02_crop_classification"
+    capabilities:
+      - Multi-class crop type classification
+      - Temporal pattern recognition (crop phenology stages)
+      - Transfer learning from pretrained vision models
+      - Data augmentation for satellite imagery
+      - Multi-scale feature extraction
+    skills:
+      - kaggle-deep-learning
+      - kaggle-model-trainer
+      - kaggle-validator
+    strategy: "Baseline CNN → Temporal features → Transfer learning → Ensemble → Submit"
+    formula:
+      objective: minimize_cross_entropy_loss
+      function: "L = -Σ yᵢ * log(ŷᵢ)"
+      metrics: [accuracy, f1_score, cohen_kappa]
+    loop_config:
+      objective: minimize_cross_entropy_loss
+      exit_condition: "||state[n] - state[n-1]||_2 < epsilon"
+      epsilon: 0.0005
+      max_iterations: 15
+      patience: 3
+
+  - expert_name: "03_Tabular_Agriculture"
+    slug: "03_tabular_agriculture"
+    capabilities:
+      - Soil property feature engineering (pH, N, P, K, organic matter)
+      - Weather data integration (temperature, precipitation, humidity, GDD)
+      - Lag and rolling features for temporal data
+      - Geospatial coordinate features (latitude, longitude, elevation)
+      - Gradient boosting for heterogeneous tabular data
+    skills:
+      - kaggle-feature-engineer
+      - kaggle-ensemble
+      - kaggle-preprocessor
+      - kaggle-model-trainer
+    strategy: "EDA → Feature engineering → LightGBM baseline → XGBoost → CatBoost → Ensemble"
+    formula:
+      objective: minimize_validation_loss
+      function: "L = f(X_soil, X_weather, X_temporal, X_spatial, θ)"
+      metrics: [rmse, mae, r2_score]
+    loop_config:
+      objective: minimize_validation_loss
+      exit_condition: "||state[n] - state[n-1]||_2 < epsilon"
+      epsilon: 0.001
+      max_iterations: 10
+      patience: 3
+
+  - expert_name: "04_Time_Series_Phenology"
+    slug: "04_time_series_phenology"
+    capabilities:
+      - Crop growth stage detection from temporal signals
+      - Seasonal decomposition of vegetation indices
+      - Growing degree day (GDD) calculation
+      - Phenological feature extraction (green-up, peak, senescence)
+      - LSTM/Transformer for temporal sequences
+    skills:
+      - kaggle-deep-learning
+      - kaggle-feature-engineer
+      - kaggle-model-trainer
+    strategy: "Temporal decomposition → Phenology features → LSTM baseline → Transformer → Combine with tabular"
+    formula:
+      objective: minimize_mse
+      function: "L = (1/T) * Σₜ (yₜ - ŷₜ)²"
+      metrics: [rmse, mae, mape]
+    loop_config:
+      objective: minimize_mse
+      exit_condition: "||state[n] - state[n-1]||_2 < epsilon"
+      epsilon: 0.001
+      max_iterations: 12
+      patience: 3
+
+  - expert_name: "05_Geospatial_Validation"
+    slug: "05_geospatial_validation"
+    capabilities:
+      - Spatial block cross-validation (prevent spatial leakage)
+      - Temporal holdout strategies (train on past, validate on future)
+      - Stratified sampling by agro-ecological zone
+      - Cluster-based spatial splitting
+      - Leakage detection in geospatial features
+    skills:
+      - kaggle-validator
+      - kaggle-preprocessor
+    strategy: "Spatial-block CV (5-fold) → Temporal holdout → Leakage audit → Final ensemble → Submit"
+    formula:
+      objective: minimize_cv_variance
+      function: "CV_score = (1/K) * Σₖ metric(y_val_k, ŷ_val_k)"
+      metrics: [cv_mean, cv_std, oof_score]
+    loop_config:
+      objective: minimize_cv_variance
+      exit_condition: "||state[n] - state[n-1]||_2 < epsilon"
+      epsilon: 0.0005
+      max_iterations: 8
+      patience: 3
+
+  - expert_name: "06_Ensemble_Synthesis"
+    slug: "06_ensemble_synthesis"
+    capabilities:
+      - Stacking with diverse base learners
+      - Weighted blending optimization (scipy.optimize or Optuna)
+      - Out-of-fold prediction generation for stacking
+      - Diversity-aware model selection (correlation-based)
+      - Rank averaging for robust combination
+    skills:
+      - kaggle-ensemble
+      - kaggle-optimizer
+      - kaggle-validator
+    strategy: "Train diverse base models → Generate OOF predictions → Optimize weights → Stack → Submit"
+    formula:
+      objective: minimize_validation_loss
+      function: "ŷ = Σ wᵢ * fᵢ(X), s.t. Σ wᵢ = 1, wᵢ ≥ 0"
+      metrics: [competition_metric, ensemble_diversity]
+    loop_config:
+      objective: minimize_validation_loss
+      exit_condition: "||state[n] - state[n-1]||_2 < epsilon"
+      epsilon: 0.0005
+      max_iterations: 20
+      patience: 5
+
+  - expert_name: "07_Feature_Selection"
+    slug: "07_feature_selection"
+    capabilities:
+      - Mutual information feature ranking
+      - Permutation importance analysis
+      - Boruta / SHAP-based feature selection
+      - Recursive feature elimination
+      - Correlation-based redundancy removal
+    skills:
+      - kaggle-feature-engineer
+      - kaggle-preprocessor
+      - kaggle-optimizer
+    strategy: "Compute all features → Rank by importance → Remove redundant → Validate subset → Iterate"
+    formula:
+      objective: maximize_information_gain
+      function: "I(X; Y) = Σ p(x,y) * log(p(x,y) / (p(x)*p(y)))"
+      metrics: [feature_importance, model_score_delta]
+    loop_config:
+      objective: maximize_information_gain
+      exit_condition: "||state[n] - state[n-1]||_2 < epsilon"
+      epsilon: 0.001
+      max_iterations: 10
+      patience: 3
+
+  - expert_name: "08_Yield_Prediction"
+    slug: "08_yield_prediction"
+    capabilities:
+      - Crop yield regression from multi-source data
+      - Weather-yield interaction modeling
+      - Soil productivity index computation
+      - Historical yield trend decomposition
+      - Uncertainty quantification for predictions
+    skills:
+      - kaggle-model-trainer
+      - kaggle-feature-engineer
+      - kaggle-optimizer
+    strategy: "Baseline regression → Add weather interactions → Add soil features → Quantile regression → Submit"
+    formula:
+      objective: minimize_rmse
+      function: "Yield = f(soil, weather, management, genetics) + ε"
+      metrics: [rmse, mae, r2_score, pinball_loss]
+    loop_config:
+      objective: minimize_rmse
+      exit_condition: "||state[n] - state[n-1]||_2 < epsilon"
+      epsilon: 0.001
+      max_iterations: 10
+      patience: 3
+
+convergence_pipeline:
+  description: >
+    Run experts in sequence, passing state between them.
+    Each expert refines the state vector. The loop continues
+    until the global state converges.
+  phases:
+    - name: data_preparation
+      experts: ["01_remote_sensing", "03_tabular_agriculture"]
+      description: "Extract and engineer features from raw data"
+    - name: temporal_analysis
+      experts: ["04_time_series_phenology"]
+      description: "Add temporal and phenological features"
+    - name: model_training
+      experts: ["02_crop_classification", "08_yield_prediction"]
+      description: "Train task-specific models"
+    - name: validation
+      experts: ["05_geospatial_validation", "07_feature_selection"]
+      description: "Validate with spatial awareness, prune features"
+    - name: ensemble
+      experts: ["06_ensemble_synthesis"]
+      description: "Combine models into final ensemble"
