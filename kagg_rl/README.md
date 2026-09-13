@@ -1,18 +1,15 @@
-# Kaggriculture IL Bootstrap + PPO Fine-tune
+# Kaggriculture IL Bootstrap + PPO + HER (primary)
 
-## What is imitation learning here?
+## Canonical stack
 
-**Behavioral cloning (BC):** treat top agents' gameplay as labeled demos  
-`(observation → action)` and train a policy to imitate them with supervised learning.
+**Primary:** top-agent histories → **behavioral cloning** → **PPO** fine-tune / self-play + **HER** milestones  
+**Ablation only:** hierarchical Dueling Double DQN + PER (Path B / `train_tier*_champion`)  
+**Ignore for this env:** A2C, DDPG, SAC, TD3 (continuous / dominated)
 
-That is the right bootstrap when you already have **all top-agent gameplay history**:
-you skip cold-start PPO exploration and start near the meta.
-
-**Then PPO** (optional): fine-tune the BC policy online so it can beat clones / adapt,
-using a clipped policy-ratio update so training stays stable.
+Action space is **multi-discrete** (farmer op/item, market op/item) with soft qty regression heads — not continuous control.
 
 ```
-Your top-agent episodes
+Your top-agent episodes (until ~1 week before close)
         │
         ▼
   Filter (Elo / cash / winners / agent names)
@@ -21,30 +18,49 @@ Your top-agent episodes
   Behavioral cloning  →  checkpoints/bc.pt
         │
         ▼
-  PPO fine-tune (env) →  checkpoints/ppo_ft.pt
+  PPO fine-tune + HER milestones  →  checkpoints/ppo_her_primary.pt
+        │
+        ▼
+  Ladder eval vs opponents/
 ```
 
-## Point the trainer at YOUR data
-
-### Option A — flat folder of episode dumps
+## One-shot primary entrypoint
 
 ```bash
-# Activate conda env
-source ~/miniforge3/etc/profile.d/conda.sh
-conda activate kagg-ppo
+cd kaggle-mcp-server
+# Dry-run (no episodes / no kaggle-environments)
+python -m kagg_rl.train_primary --dry-run --updates 5 \
+  --out checkpoints/ppo_her_primary.pt
 
+# Or from repo root:
+python scripts/train_ppo_her_primary.py --dry-run --updates 5
+```
+
+With real top-agent history:
+
+```bash
+python -m kagg_rl.train_primary \
+  --episodes-dir /path/to/your/top_agent_episodes \
+  --min-reward 149902 \
+  --winners-only \
+  --bc-epochs 5 \
+  --updates 20 \
+  --out checkpoints/ppo_her_primary.pt
+```
+
+## BC only
+
+```bash
 python -m kagg_rl.il.train_bc \
   --episodes-dir /path/to/your/top_agent_episodes \
-  --min-reward 150000 \
+  --min-reward 149902 \
   --winners-only \
   --top-k-seats 500 \
   --epochs 5 \
   --out checkpoints/bc.pt
 ```
 
-Accepted files: `*.json` or `*.json.gz` Kaggle episode tapes with `steps[t][seat].observation/action`.
-
-### Option B — HF-style store (`index.csv` + `seats.csv` + `episodes/{00-99}/`)
+HF-style store (`index.csv` + `seats.csv` + `episodes/{00-99}/`):
 
 ```bash
 python -m kagg_rl.il.train_bc \
@@ -55,17 +71,7 @@ python -m kagg_rl.il.train_bc \
   --out checkpoints/bc.pt
 ```
 
-### Filter to named top agents
-
-```bash
-python -m kagg_rl.il.train_bc \
-  --episodes-dir /path/to/episodes \
-  --top-agents "tetsuya,Crop Dusta,QQ Farming" \
-  --min-reward 100000 \
-  --out checkpoints/bc_top3.pt
-```
-
-## PPO fine-tune (after BC)
+## PPO + HER fine-tune (after BC)
 
 ```bash
 python -m kagg_rl.ppo.train \
@@ -75,24 +81,30 @@ python -m kagg_rl.ppo.train \
   --out checkpoints/ppo_ft.pt
 ```
 
-`--dry-run` exercises the clipped PPO objective without `kaggle-environments`.
-Wire the real env in `kagg_rl/ppo/train.py` when ready.
+`--no-her` disables milestone bonuses (ablation). Wire the real env in `kagg_rl/ppo/train.py` when ready.
+
+## HER milestones
+
+See `kagg_rl/her/milestones.py`. Default goals: survive/feed, cash 10k/50k/100k, late liquidation. Achieved goals densify sparse season-end money for GAE.
 
 ## Layout
 
 | Path | Role |
 |------|------|
+| `kagg_rl/action_space.py` | Multi-discrete framing; primary vs ablation banners |
+| `kagg_rl/her/` | Milestone HER relabeling |
 | `kagg_rl/il/ingest.py` | Discover episodes, filter top seats |
 | `kagg_rl/il/features.py` | Obs → float vector |
 | `kagg_rl/il/actions.py` | Action → multi-head labels |
 | `kagg_rl/il/dataset.py` | Build tensors from seats |
 | `kagg_rl/il/model.py` | Shared multi-head policy + critic |
 | `kagg_rl/il/train_bc.py` | BC trainer CLI |
-| `kagg_rl/ppo/train.py` | PPO fine-tune from BC |
+| `kagg_rl/ppo/train.py` | PPO fine-tune from BC (+ HER) |
+| `kagg_rl/train_primary.py` | **Primary** BC → PPO+HER entrypoint |
 
 ## Notes
 
 - Farmer + first market order are modeled as classification heads (op/item) + qty regression.
-- Full multi-order market sequences / hand micro-actions are future work.
 - Prefer **high Elo + high final cash + winners** seats to avoid cloning weak play.
-- Deduplicate near-identical meta scripts (cluster/minhash) before training if your dump is clone-heavy — otherwise BC overfits one sell-order variant.
+- After leaderboard histories stop (~1 week out), lean on self-play + ladder; do not expect pure offline DQN replay of an old meta to keep up.
+- Path B DQN remains for controlled ablations only — not the submission brain.

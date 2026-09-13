@@ -1,19 +1,19 @@
 """PPO fine-tune starting from an imitation-learning (BC) checkpoint.
 
+Primary Kaggriculture stack: multi-discrete BC → PPO + HER milestones.
+
 What is PPO?
   Proximal Policy Optimization updates a policy with a *clipped* probability
   ratio so each step cannot move too far from the behavior that collected the
-  batch. That stability is why it is a default for discrete game agents.
+  batch. That stability is why it is the default online learner for this
+  discrete farm game.
 
-This module expects a BC checkpoint from ``kagg_rl.il.train_bc`` and fine-tunes
-it against a callable environment factory. When no real Kaggriculture env is
-installed, use ``--dry-run`` to verify the clipped objective on synthetic rolls.
+HER:
+  After each rollout, sparse end-of-season / milestone goals that were actually
+  achieved are used to add a hindsight bonus (see ``kagg_rl.her``).
 
-Wire a real env later::
-
-    def make_env():
-        from kaggle_environments import make
-        return make("kaggriculture")
+Use ``--dry-run`` to verify the clipped objective + HER plumbing without
+``kaggle-environments``. Wire a real env via ``make_env`` when ready.
 """
 
 from __future__ import annotations
@@ -27,6 +27,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from kagg_rl.action_space import PRIMARY_STACK, kaggriculture_action_spec
+from kagg_rl.her import (
+    EpisodeMilestoneInfo,
+    relabel_rewards_with_her,
+    synthetic_milestone_info,
+)
 from kagg_rl.il.model import MultiHeadPolicy
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -116,8 +122,16 @@ def compute_gae(rewards, values, dones, gamma=0.99, lam=0.95):
     return advantages, returns
 
 
-def synthetic_rollout(model: MultiHeadPolicy, device, horizon=128):
-    """Dry-run rollout with random obs / bank-delta rewards for plumbing tests."""
+def synthetic_rollout(
+    model: MultiHeadPolicy,
+    device,
+    horizon=128,
+    *,
+    use_her: bool = True,
+    her_scale: float = 1.0,
+    final_cash: float = 55_000.0,
+):
+    """Dry-run rollout with random obs; optional HER milestone bonuses."""
     obs_dim = model.backbone[0].in_features
     obs_list, logps, rewards, values, dones = [], [], [], [], []
     act_lists = {k: [] for k in ("farmer_op", "farmer_item", "market_op", "market_item")}
@@ -131,6 +145,7 @@ def synthetic_rollout(model: MultiHeadPolicy, device, horizon=128):
             act_lists[k].append(actions[k].squeeze(0))
         logps.append(logprob.squeeze(0))
         values.append(value.squeeze(0))
+        # Sparse-ish bank delta; HER densifies when milestones hit.
         rewards.append(torch.tensor(float(np.random.randn() * 0.01), device=device))
         dones.append(torch.tensor(1.0 if t == horizon - 1 else 0.0, device=device))
 
@@ -140,12 +155,42 @@ def synthetic_rollout(model: MultiHeadPolicy, device, horizon=128):
     rew_t = torch.stack(rewards)
     val_t = torch.stack(values)
     done_t = torch.stack(dones)
+
+    her_meta = {"n_milestones": 0, "milestones_hit": []}
+    if use_her:
+        info = synthetic_milestone_info(horizon, final_cash=final_cash)
+        her_out = relabel_rewards_with_her(rew_t.cpu(), info, base_scale=her_scale)
+        rew_t = her_out["rewards"].to(device)
+        her_meta = {
+            "n_milestones": her_out["n_milestones"],
+            "milestones_hit": her_out["milestones_hit"],
+        }
+
     adv, ret = compute_gae(rew_t, val_t, done_t)
-    return obs_t, actions_t, logp_t.detach(), ret.detach(), adv.detach()
+    return (
+        obs_t,
+        actions_t,
+        logp_t.detach(),
+        ret.detach(),
+        adv.detach(),
+        her_meta,
+    )
+
+
+def apply_her_to_episode_rewards(
+    rewards: torch.Tensor,
+    info: EpisodeMilestoneInfo,
+    *,
+    her_scale: float = 1.0,
+) -> Dict[str, object]:
+    """Public helper for online env rollouts to inject HER before GAE."""
+    return relabel_rewards_with_her(rewards, info, base_scale=her_scale)
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="PPO fine-tune from BC checkpoint")
+    p = argparse.ArgumentParser(
+        description=f"PPO fine-tune from BC ({PRIMARY_STACK})"
+    )
     p.add_argument("--bc-checkpoint", type=Path, required=True)
     p.add_argument("--out", type=Path, default=Path("checkpoints/ppo_ft.pt"))
     p.add_argument("--updates", type=int, default=10)
@@ -153,28 +198,49 @@ def parse_args():
     p.add_argument("--clip-eps", type=float, default=0.2)
     p.add_argument("--device", type=str, default="cpu")
     p.add_argument(
+        "--no-her",
+        action="store_true",
+        help="Disable HER milestone bonuses (ablation)",
+    )
+    p.add_argument("--her-scale", type=float, default=1.0)
+    p.add_argument("--horizon", type=int, default=128)
+    p.add_argument(
         "--dry-run",
         action="store_true",
-        help="Run PPO math on synthetic rollouts (no kaggle-environments needed)",
+        help="Run PPO+HER math on synthetic rollouts (no kaggle-environments)",
     )
     return p.parse_args()
 
 
 def main():
     args = parse_args()
+    spec = kaggriculture_action_spec()
+    logger.info(
+        "Action space multi-discrete heads=%s qty_aux=%s | stack=%s",
+        spec.as_dict(),
+        spec.qty_continuous_aux,
+        PRIMARY_STACK,
+    )
     device = torch.device(args.device)
     model = load_bc_policy(args.bc_checkpoint, device)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
+    use_her = not args.no_her
 
     if not args.dry_run:
         logger.warning(
             "No online Kaggriculture env wired in this entrypoint yet. "
-            "Use --dry-run to exercise PPO, or extend main() with kaggle_environments."
+            "Use --dry-run to exercise PPO+HER, or extend main() with kaggle_environments."
         )
         args.dry_run = True
 
     for update in range(1, args.updates + 1):
-        obs, actions, old_logp, ret, adv = synthetic_rollout(model, device)
+        obs, actions, old_logp, ret, adv, her_meta = synthetic_rollout(
+            model,
+            device,
+            horizon=args.horizon,
+            use_her=use_her,
+            her_scale=args.her_scale,
+        )
         stats = ppo_update(
             model,
             opt,
@@ -185,10 +251,28 @@ def main():
             adv,
             clip_eps=args.clip_eps,
         )
-        logger.info("update %d  %s", update, stats)
+        logger.info(
+            "update %d  %s  her_milestones=%s (%s)",
+            update,
+            stats,
+            her_meta.get("n_milestones"),
+            her_meta.get("milestones_hit"),
+        )
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"model": model.state_dict(), "from_bc": str(args.bc_checkpoint)}, args.out)
+    torch.save(
+        {
+            "model": model.state_dict(),
+            "from_bc": str(args.bc_checkpoint),
+            "primary_stack": PRIMARY_STACK,
+            "use_her": use_her,
+            "action_spec": spec.as_dict(),
+            "obs_dim": model.backbone[0].in_features,
+            "hidden": 256,
+            "depth": 3,
+        },
+        args.out,
+    )
     logger.info("saved %s", args.out)
 
 

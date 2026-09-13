@@ -176,7 +176,7 @@ experts:
       - kaggle-model-trainer
       - kaggle-optimizer
       - kaggle-rl
-    strategy: "Imitation learning from top replays → PPO self-play → Reward shaping → Hybrid CEO (RL) + executor (deterministic) → Evaluate vs meta"
+    strategy: "PRIMARY: Imitation learning from top replays → PPO self-play + HER milestones → Reward shaping → Hybrid CEO (RL) + executor (deterministic) → Evaluate vs meta. Path B hierarchical DQN is ablation-only."
     formula:
       objective: maximize_expected_return
       function: "J(π) = E[Σ γ^t r_t]; r_t = bank_delta_t + diversity_bonus_t"

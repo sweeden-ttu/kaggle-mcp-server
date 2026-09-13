@@ -4,7 +4,7 @@ Example (your local dumps)::
 
     python -m kagg_rl.il.train_bc \\
       --episodes-dir /path/to/your/top_agent_episodes \\
-      --min-reward 150000 \\
+      --min-reward 149902 \\
       --winners-only \\
       --epochs 5 \\
       --out checkpoints/bc.pt
